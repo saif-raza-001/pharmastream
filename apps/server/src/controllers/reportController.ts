@@ -1,150 +1,139 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
 
-// Sales Report
+const getString = (value: any): string | undefined => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0];
+  return undefined;
+};
+
 export const getSalesReport = async (req: Request, res: Response) => {
   try {
-    const { from, to, customerId } = req.query;
+    const from = getString(req.query.from);
+    const to = getString(req.query.to);
+    const customerId = getString(req.query.customerId);
+
+    const where: any = {};
     
-    const dateFilter: any = {};
-    if (from) dateFilter.gte = new Date(from as string);
-    if (to) {
-      const toDate = new Date(to as string);
-      toDate.setHours(23, 59, 59, 999);
-      dateFilter.lte = toDate;
+    if (from && to) {
+      where.invoiceDate = {
+        gte: new Date(from),
+        lte: new Date(to)
+      };
     }
     
-    const where: any = {};
-    if (from || to) where.invoiceDate = dateFilter;
-    if (customerId) where.customerId = customerId as string;
-    
-    // Get invoices with items
+    if (customerId) {
+      where.customerId = customerId;
+    }
+
     const invoices = await prisma.salesInvoice.findMany({
       where,
       include: {
-        customer: { select: { id: true, name: true, city: true } },
+        customer: true,
         items: {
           include: {
-            product: { select: { name: true } },
-            batch: { select: { batchNo: true } }
+            product: true,
+            batch: true
           }
         }
       },
       orderBy: { invoiceDate: 'desc' }
     });
-    
-    // Calculate summary
-    const summary = {
-      totalInvoices: invoices.length,
-      grossAmount: invoices.reduce((sum, inv) => sum + Number(inv.grossAmount), 0),
-      totalDiscount: invoices.reduce((sum, inv) => sum + Number(inv.totalDiscount), 0),
-      taxableAmount: invoices.reduce((sum, inv) => sum + Number(inv.taxableAmount), 0),
-      cgstAmount: invoices.reduce((sum, inv) => sum + Number(inv.cgstAmount), 0),
-      sgstAmount: invoices.reduce((sum, inv) => sum + Number(inv.sgstAmount), 0),
-      grandTotal: invoices.reduce((sum, inv) => sum + Number(inv.grandTotal), 0),
-      paidAmount: invoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0),
-      dueAmount: invoices.reduce((sum, inv) => sum + Number(inv.dueAmount), 0),
-      cashSales: invoices.filter(inv => inv.invoiceType === 'CASH').length,
-      creditSales: invoices.filter(inv => inv.invoiceType === 'CREDIT').length
-    };
-    
-    // Product-wise summary
-    const productSales: { [key: string]: { name: string; qty: number; amount: number } } = {};
-    invoices.forEach(inv => {
-      inv.items.forEach(item => {
-        const key = item.productId;
-        if (!productSales[key]) {
-          productSales[key] = { name: item.product.name, qty: 0, amount: 0 };
-        }
-        productSales[key].qty += item.quantity;
-        productSales[key].amount += Number(item.totalAmount);
-      });
+
+    const summary = await prisma.salesInvoice.aggregate({
+      where,
+      _sum: {
+        grandTotal: true,
+        paidAmount: true,
+        dueAmount: true,
+        cgstAmount: true,
+        sgstAmount: true
+      },
+      _count: true
     });
-    
-    const topProducts = Object.values(productSales)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 20);
-    
-    res.json({ invoices, summary, topProducts });
+
+    res.json({
+      invoices,
+      summary: {
+        totalInvoices: summary._count,
+        totalAmount: summary._sum.grandTotal || 0,
+        totalPaid: summary._sum.paidAmount || 0,
+        totalDue: summary._sum.dueAmount || 0,
+        totalGst: (Number(summary._sum.cgstAmount) || 0) + (Number(summary._sum.sgstAmount) || 0)
+      }
+    });
   } catch (error) {
     console.error('Sales report error:', error);
     res.status(500).json({ error: 'Failed to generate sales report' });
   }
 };
 
-// Purchase Report
 export const getPurchaseReport = async (req: Request, res: Response) => {
   try {
-    const { from, to, supplierId } = req.query;
+    const from = getString(req.query.from);
+    const to = getString(req.query.to);
+    const supplierId = getString(req.query.supplierId);
+
+    const where: any = {};
     
-    const dateFilter: any = {};
-    if (from) dateFilter.gte = new Date(from as string);
-    if (to) {
-      const toDate = new Date(to as string);
-      toDate.setHours(23, 59, 59, 999);
-      dateFilter.lte = toDate;
+    if (from && to) {
+      where.purchaseDate = {
+        gte: new Date(from),
+        lte: new Date(to)
+      };
     }
     
-    const where: any = {};
-    if (from || to) where.purchaseDate = dateFilter;
-    if (supplierId) where.supplierId = supplierId as string;
-    
+    if (supplierId) {
+      where.supplierId = supplierId;
+    }
+
     const purchases = await prisma.purchase.findMany({
       where,
       include: {
-        supplier: { select: { id: true, name: true, city: true } },
+        supplier: true,
         items: {
           include: {
-            product: { select: { name: true } },
-            batch: { select: { batchNo: true } }
+            product: true,
+            batch: true
           }
         }
       },
       orderBy: { purchaseDate: 'desc' }
     });
-    
-    const summary = {
-      totalPurchases: purchases.length,
-      grossAmount: purchases.reduce((sum, p) => sum + Number(p.grossAmount), 0),
-      totalDiscount: purchases.reduce((sum, p) => sum + Number(p.totalDiscount), 0),
-      taxableAmount: purchases.reduce((sum, p) => sum + Number(p.taxableAmount), 0),
-      cgstAmount: purchases.reduce((sum, p) => sum + Number(p.cgstAmount), 0),
-      sgstAmount: purchases.reduce((sum, p) => sum + Number(p.sgstAmount), 0),
-      grandTotal: purchases.reduce((sum, p) => sum + Number(p.grandTotal), 0)
-    };
-    
-    // Supplier-wise summary
-    const supplierPurchases: { [key: string]: { name: string; count: number; amount: number } } = {};
-    purchases.forEach(p => {
-      const key = p.supplierId;
-      if (!supplierPurchases[key]) {
-        supplierPurchases[key] = { name: p.supplier.name, count: 0, amount: 0 };
-      }
-      supplierPurchases[key].count++;
-      supplierPurchases[key].amount += Number(p.grandTotal);
+
+    const summary = await prisma.purchase.aggregate({
+      where,
+      _sum: {
+        grandTotal: true,
+        cgstAmount: true,
+        sgstAmount: true
+      },
+      _count: true
     });
-    
-    const topSuppliers = Object.values(supplierPurchases)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 10);
-    
-    res.json({ purchases, summary, topSuppliers });
+
+    res.json({
+      purchases,
+      summary: {
+        totalPurchases: summary._count,
+        totalAmount: summary._sum.grandTotal || 0,
+        totalGst: (Number(summary._sum.cgstAmount) || 0) + (Number(summary._sum.sgstAmount) || 0)
+      }
+    });
   } catch (error) {
     console.error('Purchase report error:', error);
     res.status(500).json({ error: 'Failed to generate purchase report' });
   }
 };
 
-// Stock Report
 export const getStockReport = async (req: Request, res: Response) => {
   try {
-    const { filter } = req.query; // 'all', 'low', 'expiring', 'out'
-    
+    const filter = getString(req.query.filter) || 'all';
+
     const products = await prisma.product.findMany({
       where: { isActive: true },
       include: {
-        manufacturer: { select: { name: true, shortName: true } },
-        category: { select: { name: true } },
+        manufacturer: true,
+        category: true,
         batches: {
           where: { isActive: true },
           orderBy: { expiryDate: 'asc' }
@@ -152,183 +141,131 @@ export const getStockReport = async (req: Request, res: Response) => {
       },
       orderBy: { name: 'asc' }
     });
-    
+
     const today = new Date();
-    const thirtyDaysLater = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const sixtyDaysLater = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);
-    
-    let stockItems = products.map(product => {
-      const totalStock = product.batches.reduce((sum, b) => sum + b.currentStock, 0);
-      const stockValue = product.batches.reduce((sum, b) => sum + (b.currentStock * Number(b.purchaseRate)), 0);
-      const mrpValue = product.batches.reduce((sum, b) => sum + (b.currentStock * Number(b.mrp)), 0);
-      
-      // Find earliest expiry batch with stock
-      const batchesWithStock = product.batches.filter(b => b.currentStock > 0);
-      const earliestExpiry = batchesWithStock.length > 0 
-        ? batchesWithStock.reduce((earliest, b) => 
-            new Date(b.expiryDate) < new Date(earliest.expiryDate) ? b : earliest
-          )
-        : null;
-      
-      const isLowStock = product.minStockAlert ? totalStock <= product.minStockAlert : totalStock < 50;
-      const isOutOfStock = totalStock === 0;
-      const isExpiringSoon = earliestExpiry && new Date(earliestExpiry.expiryDate) <= thirtyDaysLater;
-      const isExpiring60 = earliestExpiry && new Date(earliestExpiry.expiryDate) <= sixtyDaysLater;
-      const isExpired = earliestExpiry && new Date(earliestExpiry.expiryDate) < today;
-      
-      return {
-        id: product.id,
-        name: product.name,
-        manufacturer: product.manufacturer?.shortName || product.manufacturer?.name || '-',
-        category: product.category?.name || '-',
-        rackLocation: product.rackLocation || '-',
-        totalStock,
-        stockValue: Math.round(stockValue * 100) / 100,
-        mrpValue: Math.round(mrpValue * 100) / 100,
-        minStockAlert: product.minStockAlert || 50,
-        batchCount: batchesWithStock.length,
-        earliestExpiry: earliestExpiry?.expiryDate || null,
-        isLowStock,
-        isOutOfStock,
-        isExpiringSoon,
-        isExpiring60,
-        isExpired,
-        batches: product.batches.map(b => ({
-          id: b.id,
-          batchNo: b.batchNo,
-          expiryDate: b.expiryDate,
-          currentStock: b.currentStock,
-          mrp: Number(b.mrp),
-          saleRate: Number(b.saleRate),
-          purchaseRate: Number(b.purchaseRate)
-        }))
-      };
-    });
-    
-    // Apply filter
+    const thirtyDaysLater = new Date();
+    thirtyDaysLater.setDate(today.getDate() + 30);
+
+    let filteredProducts = products.map(p => ({
+      ...p,
+      totalStock: p.batches.reduce((sum, b) => sum + b.currentStock, 0),
+      stockValue: p.batches.reduce((sum, b) => sum + (b.currentStock * Number(b.purchaseRate)), 0),
+      nearestExpiry: p.batches.length > 0 ? p.batches[0].expiryDate : null
+    }));
+
     if (filter === 'low') {
-      stockItems = stockItems.filter(item => item.isLowStock && !item.isOutOfStock);
+      filteredProducts = filteredProducts.filter(p => 
+        p.totalStock > 0 && p.totalStock < (p.minStockAlert || 50)
+      );
     } else if (filter === 'out') {
-      stockItems = stockItems.filter(item => item.isOutOfStock);
+      filteredProducts = filteredProducts.filter(p => p.totalStock === 0);
     } else if (filter === 'expiring') {
-      stockItems = stockItems.filter(item => item.isExpiringSoon && !item.isExpired);
+      filteredProducts = filteredProducts.filter(p => 
+        p.batches.some(b => 
+          new Date(b.expiryDate) <= thirtyDaysLater && 
+          new Date(b.expiryDate) > today &&
+          b.currentStock > 0
+        )
+      );
     } else if (filter === 'expired') {
-      stockItems = stockItems.filter(item => item.isExpired);
+      filteredProducts = filteredProducts.filter(p => 
+        p.batches.some(b => 
+          new Date(b.expiryDate) < today && b.currentStock > 0
+        )
+      );
     }
-    
-    // Summary
+
     const summary = {
-      totalProducts: products.length,
-      totalStock: stockItems.reduce((sum, item) => sum + item.totalStock, 0),
-      totalStockValue: stockItems.reduce((sum, item) => sum + item.stockValue, 0),
-      totalMRPValue: stockItems.reduce((sum, item) => sum + item.mrpValue, 0),
-      lowStockCount: products.filter(p => {
-        const stock = p.batches.reduce((sum, b) => sum + b.currentStock, 0);
-        return stock > 0 && stock <= (p.minStockAlert || 50);
-      }).length,
-      outOfStockCount: products.filter(p => 
-        p.batches.reduce((sum, b) => sum + b.currentStock, 0) === 0
-      ).length,
-      expiringSoonCount: stockItems.filter(item => item.isExpiringSoon && !item.isExpired).length,
-      expiredCount: stockItems.filter(item => item.isExpired).length
+      totalProducts: filteredProducts.length,
+      totalStock: filteredProducts.reduce((sum, p) => sum + p.totalStock, 0),
+      totalValue: filteredProducts.reduce((sum, p) => sum + p.stockValue, 0)
     };
-    
-    res.json({ items: stockItems, summary });
+
+    res.json({ products: filteredProducts, summary });
   } catch (error) {
     console.error('Stock report error:', error);
     res.status(500).json({ error: 'Failed to generate stock report' });
   }
 };
 
-// GST Report (for filing)
-export const getGSTReport = async (req: Request, res: Response) => {
+export const getGstReport = async (req: Request, res: Response) => {
   try {
-    const { from, to } = req.query;
-    
+    const from = getString(req.query.from);
+    const to = getString(req.query.to);
+
     if (!from || !to) {
-      return res.status(400).json({ error: 'Date range required' });
+      return res.status(400).json({ error: 'From and To dates are required' });
     }
-    
-    const fromDate = new Date(from as string);
-    const toDate = new Date(to as string);
-    toDate.setHours(23, 59, 59, 999);
-    
-    // Sales (Output GST)
-    const sales = await prisma.salesInvoice.findMany({
-      where: {
-        invoiceDate: { gte: fromDate, lte: toDate }
+
+    const salesWhere = {
+      invoiceDate: {
+        gte: new Date(from),
+        lte: new Date(to)
+      }
+    };
+
+    const purchaseWhere = {
+      purchaseDate: {
+        gte: new Date(from),
+        lte: new Date(to)
+      }
+    };
+
+    const salesSummary = await prisma.salesInvoice.aggregate({
+      where: salesWhere,
+      _sum: {
+        taxableAmount: true,
+        cgstAmount: true,
+        sgstAmount: true,
+        igstAmount: true,
+        grandTotal: true
       },
-      include: {
-        customer: { select: { name: true, gstin: true } }
-      },
-      orderBy: { invoiceDate: 'asc' }
+      _count: true
     });
-    
-    // Purchases (Input GST)
-    const purchases = await prisma.purchase.findMany({
-      where: {
-        purchaseDate: { gte: fromDate, lte: toDate }
+
+    const purchaseSummary = await prisma.purchase.aggregate({
+      where: purchaseWhere,
+      _sum: {
+        taxableAmount: true,
+        cgstAmount: true,
+        sgstAmount: true,
+        igstAmount: true,
+        grandTotal: true
       },
-      include: {
-        supplier: { select: { name: true, gstin: true } }
-      },
-      orderBy: { purchaseDate: 'asc' }
+      _count: true
     });
-    
-    // Calculate GST summaries
-    const outputGST = {
-      taxableAmount: sales.reduce((sum, s) => sum + Number(s.taxableAmount), 0),
-      cgst: sales.reduce((sum, s) => sum + Number(s.cgstAmount), 0),
-      sgst: sales.reduce((sum, s) => sum + Number(s.sgstAmount), 0),
-      igst: sales.reduce((sum, s) => sum + Number(s.igstAmount), 0),
-      total: 0
-    };
-    outputGST.total = outputGST.cgst + outputGST.sgst + outputGST.igst;
-    
-    const inputGST = {
-      taxableAmount: purchases.reduce((sum, p) => sum + Number(p.taxableAmount), 0),
-      cgst: purchases.reduce((sum, p) => sum + Number(p.cgstAmount), 0),
-      sgst: purchases.reduce((sum, p) => sum + Number(p.sgstAmount), 0),
-      igst: purchases.reduce((sum, p) => sum + Number(p.igstAmount), 0),
-      total: 0
-    };
-    inputGST.total = inputGST.cgst + inputGST.sgst + inputGST.igst;
-    
-    const netGST = {
-      cgst: outputGST.cgst - inputGST.cgst,
-      sgst: outputGST.sgst - inputGST.sgst,
-      igst: outputGST.igst - inputGST.igst,
-      total: outputGST.total - inputGST.total
-    };
-    
-    // Rate-wise breakdown (5%, 12%, 18%, 28%)
-    // This would require items, simplified for now
-    
+
+    const outputGst = (Number(salesSummary._sum.cgstAmount) || 0) + 
+                      (Number(salesSummary._sum.sgstAmount) || 0) + 
+                      (Number(salesSummary._sum.igstAmount) || 0);
+                      
+    const inputGst = (Number(purchaseSummary._sum.cgstAmount) || 0) + 
+                     (Number(purchaseSummary._sum.sgstAmount) || 0) + 
+                     (Number(purchaseSummary._sum.igstAmount) || 0);
+
     res.json({
-      period: { from: fromDate, to: toDate },
-      sales: sales.map(s => ({
-        date: s.invoiceDate,
-        invoiceNo: s.invoiceNo,
-        customer: s.customer.name,
-        gstin: s.customer.gstin || '-',
-        taxable: Number(s.taxableAmount),
-        cgst: Number(s.cgstAmount),
-        sgst: Number(s.sgstAmount),
-        total: Number(s.grandTotal)
-      })),
-      purchases: purchases.map(p => ({
-        date: p.purchaseDate,
-        billNo: p.billNo,
-        supplier: p.supplier.name,
-        gstin: p.supplier.gstin || '-',
-        taxable: Number(p.taxableAmount),
-        cgst: Number(p.cgstAmount),
-        sgst: Number(p.sgstAmount),
-        total: Number(p.grandTotal)
-      })),
-      outputGST,
-      inputGST,
-      netGST
+      period: { from, to },
+      sales: {
+        count: salesSummary._count,
+        taxableAmount: salesSummary._sum.taxableAmount || 0,
+        cgst: salesSummary._sum.cgstAmount || 0,
+        sgst: salesSummary._sum.sgstAmount || 0,
+        igst: salesSummary._sum.igstAmount || 0,
+        totalGst: outputGst,
+        grandTotal: salesSummary._sum.grandTotal || 0
+      },
+      purchases: {
+        count: purchaseSummary._count,
+        taxableAmount: purchaseSummary._sum.taxableAmount || 0,
+        cgst: purchaseSummary._sum.cgstAmount || 0,
+        sgst: purchaseSummary._sum.sgstAmount || 0,
+        igst: purchaseSummary._sum.igstAmount || 0,
+        totalGst: inputGst,
+        grandTotal: purchaseSummary._sum.grandTotal || 0
+      },
+      netGst: outputGst - inputGst,
+      liability: Math.max(0, outputGst - inputGst),
+      credit: Math.max(0, inputGst - outputGst)
     });
   } catch (error) {
     console.error('GST report error:', error);
@@ -336,113 +273,110 @@ export const getGSTReport = async (req: Request, res: Response) => {
   }
 };
 
-// Dashboard Summary
-export const getDashboardSummary = async (req: Request, res: Response) => {
+export const getDashboard = async (req: Request, res: Response) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
-    
-    // Today's sales
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+
+    const thirtyDaysLater = new Date();
+    thirtyDaysLater.setDate(today.getDate() + 30);
+
     const todaySales = await prisma.salesInvoice.aggregate({
       where: { invoiceDate: { gte: today, lt: tomorrow } },
       _sum: { grandTotal: true },
       _count: true
     });
-    
-    // This month sales
-    const monthSales = await prisma.salesInvoice.aggregate({
-      where: { invoiceDate: { gte: thisMonthStart } },
-      _sum: { grandTotal: true },
-      _count: true
-    });
-    
-    // Last month sales (for comparison)
-    const lastMonthSales = await prisma.salesInvoice.aggregate({
-      where: { invoiceDate: { gte: lastMonthStart, lte: lastMonthEnd } },
-      _sum: { grandTotal: true }
-    });
-    
-    // Today's purchases
+
     const todayPurchases = await prisma.purchase.aggregate({
       where: { purchaseDate: { gte: today, lt: tomorrow } },
       _sum: { grandTotal: true },
       _count: true
     });
-    
-    // Outstanding amounts
+
+    const thisMonthSales = await prisma.salesInvoice.aggregate({
+      where: { invoiceDate: { gte: thisMonthStart } },
+      _sum: { grandTotal: true },
+      _count: true
+    });
+
+    const lastMonthSales = await prisma.salesInvoice.aggregate({
+      where: { invoiceDate: { gte: lastMonthStart, lte: lastMonthEnd } },
+      _sum: { grandTotal: true },
+      _count: true
+    });
+
     const customerDues = await prisma.account.aggregate({
-      where: { accountType: 'CUSTOMER', currentBalance: { gt: 0 } },
+      where: { accountType: 'CUSTOMER', currentBalance: { gt: 0 }, isActive: true },
       _sum: { currentBalance: true },
       _count: true
     });
-    
+
     const supplierDues = await prisma.account.aggregate({
-      where: { accountType: 'SUPPLIER', currentBalance: { gt: 0 } },
+      where: { accountType: 'SUPPLIER', currentBalance: { gt: 0 }, isActive: true },
       _sum: { currentBalance: true },
       _count: true
     });
-    
-    // Low stock & expiring alerts
-    const thirtyDaysLater = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-    
-    const expiringBatches = await prisma.productBatch.count({
+
+    const expiringSoon = await prisma.productBatch.count({
       where: {
         isActive: true,
         currentStock: { gt: 0 },
-        expiryDate: { lte: thirtyDaysLater, gt: today }
+        expiryDate: { gte: today, lte: thirtyDaysLater }
       }
     });
-    
-    const expiredBatches = await prisma.productBatch.count({
+
+    const expired = await prisma.productBatch.count({
       where: {
         isActive: true,
         currentStock: { gt: 0 },
         expiryDate: { lt: today }
       }
     });
-    
-    // Recent invoices
+
     const recentInvoices = await prisma.salesInvoice.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: { customer: { select: { name: true } } }
+      where: { invoiceDate: { gte: today } },
+      include: { customer: { select: { name: true } } },
+      orderBy: { invoiceDate: 'desc' },
+      take: 10
     });
-    
+
     res.json({
       today: {
-        sales: Number(todaySales._sum.grandTotal) || 0,
+        sales: todaySales._sum.grandTotal || 0,
         salesCount: todaySales._count,
-        purchases: Number(todayPurchases._sum.grandTotal) || 0,
+        purchases: todayPurchases._sum.grandTotal || 0,
         purchasesCount: todayPurchases._count
       },
       thisMonth: {
-        sales: Number(monthSales._sum.grandTotal) || 0,
-        salesCount: monthSales._count
+        sales: thisMonthSales._sum.grandTotal || 0,
+        salesCount: thisMonthSales._count
       },
       lastMonth: {
-        sales: Number(lastMonthSales._sum.grandTotal) || 0
+        sales: lastMonthSales._sum.grandTotal || 0,
+        salesCount: lastMonthSales._count
       },
       outstanding: {
-        customerDues: Number(customerDues._sum.currentBalance) || 0,
+        customerDues: customerDues._sum.currentBalance || 0,
         customerCount: customerDues._count,
-        supplierDues: Number(supplierDues._sum.currentBalance) || 0,
+        supplierDues: supplierDues._sum.currentBalance || 0,
         supplierCount: supplierDues._count
       },
       alerts: {
-        expiringSoon: expiringBatches,
-        expired: expiredBatches
+        expiringSoon,
+        expired
       },
       recentInvoices: recentInvoices.map(inv => ({
         id: inv.id,
         invoiceNo: inv.invoiceNo,
-        customer: inv.customer.name,
-        amount: Number(inv.grandTotal),
+        customer: inv.customer?.name || 'Walk-in',
+        amount: inv.grandTotal,
         date: inv.invoiceDate
       }))
     });

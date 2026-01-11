@@ -1,23 +1,28 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
 
+const getString = (value: any): string | undefined => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0];
+  return undefined;
+};
+
 export const getAccounts = async (req: Request, res: Response) => {
   try {
-    const { type, search } = req.query;
+    const type = getString(req.query.type);
+    const search = getString(req.query.search);
     
     const where: any = { isActive: true };
     
     if (type) {
-      where.accountType = type as string;
+      where.accountType = type;
     }
     
     if (search) {
-      // SQLite: use contains without mode (case-sensitive, but works)
-      const searchTerm = String(search);
       where.OR = [
-        { name: { contains: searchTerm } },
-        { mobile: { contains: searchTerm } },
-        { city: { contains: searchTerm } }
+        { name: { contains: search } },
+        { mobile: { contains: search } },
+        { city: { contains: search } }
       ];
     }
     
@@ -129,7 +134,8 @@ export const deleteAccount = async (req: Request, res: Response) => {
 export const getAccountLedger = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { from, to } = req.query;
+    const from = getString(req.query.from);
+    const to = getString(req.query.to);
     
     const account = await prisma.account.findUnique({
       where: { id }
@@ -152,7 +158,7 @@ export const getAccountLedger = async (req: Request, res: Response) => {
     let filteredEntries: any[] = [];
     
     if (from) {
-      const fromDate = new Date(from as string);
+      const fromDate = new Date(from);
       
       for (const entry of allEntries) {
         if (new Date(entry.entryDate) < fromDate) {
@@ -164,7 +170,7 @@ export const getAccountLedger = async (req: Request, res: Response) => {
         const entryDate = new Date(entry.entryDate);
         const inRange = entryDate >= fromDate;
         if (to) {
-          const toDate = new Date(to as string);
+          const toDate = new Date(to);
           toDate.setHours(23, 59, 59, 999);
           return inRange && entryDate <= toDate;
         }
@@ -253,10 +259,10 @@ function getDefaultNarration(entry: any): string {
 
 export const getAccountStats = async (req: Request, res: Response) => {
   try {
-    const { type } = req.query;
+    const type = getString(req.query.type);
     
     const where: any = { isActive: true };
-    if (type) where.accountType = type as string;
+    if (type) where.accountType = type;
     
     const stats = await prisma.account.aggregate({
       where,
@@ -284,9 +290,10 @@ export const getAccountStats = async (req: Request, res: Response) => {
 export const getAccountStatement = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { from, to } = req.query;
+    const from = getString(req.query.from);
+    const to = getString(req.query.to);
     
-    const ledgerResponse = await getAccountLedgerData(id, from as string, to as string);
+    const ledgerResponse = await getAccountLedgerData(id, from, to);
     
     if (!ledgerResponse) {
       return res.status(404).json({ error: 'Account not found' });

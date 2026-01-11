@@ -1,18 +1,36 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
 
+// Helper to safely get string from query param
+const getString = (value: any): string | undefined => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0];
+  return undefined;
+};
+
+const getNumber = (value: any, defaultVal: number): number => {
+  const str = getString(value);
+  if (!str) return defaultVal;
+  const num = parseInt(str, 10);
+  return isNaN(num) ? defaultVal : num;
+};
+
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const { search, barcode, manufacturerId, categoryId, stockStatus, page = 1, limit = 50 } = req.query;
+    const search = getString(req.query.search);
+    const barcode = getString(req.query.barcode);
+    const manufacturerId = getString(req.query.manufacturerId);
+    const categoryId = getString(req.query.categoryId);
+    const stockStatus = getString(req.query.stockStatus);
+    const page = getNumber(req.query.page, 1);
+    const limit = getNumber(req.query.limit, 50);
     
     const where: any = { isActive: true };
     
-    // Barcode exact search (for scanner)
     if (barcode) {
-      where.barcode = String(barcode);
+      where.barcode = barcode;
     } else if (search) {
-      // SQLite: use LIKE for case-insensitive search (SQLite LIKE is case-insensitive by default for ASCII)
-      const searchTerm = String(search).toLowerCase();
+      const searchTerm = search.toLowerCase();
       where.OR = [
         { name: { contains: searchTerm } },
         { saltComposition: { contains: searchTerm } },
@@ -21,8 +39,8 @@ export const getProducts = async (req: Request, res: Response) => {
       ];
     }
     
-    if (manufacturerId) where.manufacturerId = String(manufacturerId);
-    if (categoryId) where.categoryId = String(categoryId);
+    if (manufacturerId) where.manufacturerId = manufacturerId;
+    if (categoryId) where.categoryId = categoryId;
 
     const products = await prisma.product.findMany({
       where,
@@ -35,8 +53,8 @@ export const getProducts = async (req: Request, res: Response) => {
         }
       },
       orderBy: { name: 'asc' },
-      skip: (Number(page) - 1) * Number(limit),
-      take: Number(limit)
+      skip: (page - 1) * limit,
+      take: limit
     });
 
     const total = await prisma.product.count({ where });
@@ -62,14 +80,13 @@ export const getProducts = async (req: Request, res: Response) => {
       );
     }
 
-    res.json({ products: filtered, total, page: Number(page), limit: Number(limit) });
+    res.json({ products: filtered, total, page, limit });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch products' });
   }
 };
 
-// Search by barcode (exact match for scanner)
 export const getProductByBarcode = async (req: Request, res: Response) => {
   try {
     const { barcode } = req.params;
@@ -121,7 +138,6 @@ export const createProduct = async (req: Request, res: Response) => {
   try {
     const { name, barcode, saltComposition, hsnCode, manufacturerId, categoryId, packingInfo, conversionFactor, rackLocation, gstRate, minStockAlert } = req.body;
     
-    // Check barcode uniqueness
     if (barcode) {
       const existing = await prisma.product.findFirst({ where: { barcode } });
       if (existing) {
@@ -157,7 +173,6 @@ export const updateProduct = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { name, barcode, saltComposition, hsnCode, manufacturerId, categoryId, packingInfo, conversionFactor, rackLocation, gstRate, minStockAlert, isActive } = req.body;
     
-    // Check barcode uniqueness (exclude current product)
     if (barcode) {
       const existing = await prisma.product.findFirst({ 
         where: { barcode, NOT: { id } } 
@@ -208,13 +223,11 @@ export const addBatch = async (req: Request, res: Response) => {
   try {
     const { productId, batchNo, expiryDate, mrp, saleRate, purchaseRate, currentStock } = req.body;
     
-    // Check if batch already exists
     const existing = await prisma.productBatch.findFirst({
       where: { productId, batchNo }
     });
     
     if (existing) {
-      // Update existing batch stock
       const batch = await prisma.productBatch.update({
         where: { id: existing.id },
         data: {
@@ -255,7 +268,6 @@ export const importProducts = async (req: Request, res: Response) => {
 
     for (const p of products) {
       try {
-        // Find manufacturer (case-insensitive using lowercase comparison)
         const allManufacturers = await prisma.manufacturer.findMany();
         let manufacturer = allManufacturers.find(
           m => m.name.toLowerCase() === p.manufacturer.toLowerCase()
@@ -267,7 +279,6 @@ export const importProducts = async (req: Request, res: Response) => {
           });
         }
 
-        // Check by barcode first, then by name
         let existing = null;
         if (p.barcode) {
           existing = await prisma.product.findFirst({
@@ -275,7 +286,6 @@ export const importProducts = async (req: Request, res: Response) => {
           });
         }
         if (!existing) {
-          // Find by name (case-insensitive)
           const allProducts = await prisma.product.findMany({
             where: { manufacturerId: manufacturer.id }
           });
@@ -285,7 +295,6 @@ export const importProducts = async (req: Request, res: Response) => {
         }
 
         if (existing) {
-          // Update existing product
           await prisma.product.update({
             where: { id: existing.id },
             data: {
@@ -299,7 +308,6 @@ export const importProducts = async (req: Request, res: Response) => {
           });
           updated++;
           
-          // Add stock if provided
           if (p.quantity && p.batchNo) {
             await prisma.productBatch.create({
               data: {
@@ -314,7 +322,6 @@ export const importProducts = async (req: Request, res: Response) => {
             });
           }
         } else {
-          // Create new product
           const newProduct = await prisma.product.create({
             data: {
               name: p.name,
@@ -330,7 +337,6 @@ export const importProducts = async (req: Request, res: Response) => {
           });
           created++;
           
-          // Add opening stock if provided
           if (p.quantity || p.qty) {
             await prisma.productBatch.create({
               data: {
