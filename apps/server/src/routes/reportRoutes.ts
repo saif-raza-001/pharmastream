@@ -3,19 +3,19 @@ import {
   getSalesReport,
   getPurchaseReport,
   getStockReport,
-  getGSTReport,
-  getDashboardSummary
+  getGstReport,
+  getDashboard
 } from '../controllers/reportController';
 
 const router = Router();
 
 // Dashboard
-router.get('/dashboard', getDashboardSummary);
+router.get('/dashboard', getDashboard);
 
 // Reports
 router.get('/sales', getSalesReport);
 router.get('/purchases', getPurchaseReport);
 router.get('/stock', getStockReport);
-router.get('/gst', getGSTReport);
+router.get('/gst', getGstReport);
 
 export default router;
