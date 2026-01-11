@@ -16,13 +16,26 @@ const getWebPath = () => {
 
 const getDatabasePath = () => {
   if (isDev) {
-    return path.join(__dirname, '..', '..', 'data', 'pharmastream.db');
+    return path.join(__dirname, '..', '..', 'packages', 'data', 'pharmastream.db');
   }
+  
   const userDataPath = app.getPath('userData');
   if (!fs.existsSync(userDataPath)) {
     fs.mkdirSync(userDataPath, { recursive: true });
   }
-  return path.join(userDataPath, 'pharmastream.db');
+  
+  const dbPath = path.join(userDataPath, 'pharmastream.db');
+  
+  // Copy default database on first run if it doesn't exist
+  if (!fs.existsSync(dbPath)) {
+    const defaultDbPath = path.join(process.resourcesPath, 'data', 'pharmastream.db');
+    if (fs.existsSync(defaultDbPath)) {
+      console.log('Copying default database...');
+      fs.copyFileSync(defaultDbPath, dbPath);
+    }
+  }
+  
+  return dbPath;
 };
 
 function waitForServer(port, timeout = 30000) {
@@ -141,7 +154,6 @@ function createWindow() {
 
   Menu.setApplicationMenu(null);
 
-  // Register keyboard shortcut to open DevTools
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.key === 'F12' || (input.control && input.shift && input.key === 'I')) {
       mainWindow.webContents.toggleDevTools();

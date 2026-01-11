@@ -48,6 +48,11 @@
         "from": "../web/out",
         "to": "web",
         "filter": ["**/*"]
+      },
+      {
+        "from": "data",
+        "to": "data",
+        "filter": ["**/*"]
       }
     ],
     "win": {
