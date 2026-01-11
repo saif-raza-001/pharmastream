@@ -56,16 +56,20 @@ function waitForServer(port, timeout = 30000) {
 
 async function startServer() {
   const dbPath = getDatabasePath();
+  const webPath = getWebPath();
   const PORT = 3001;
   
   // Set environment variables
   process.env.PORT = String(PORT);
   process.env.DATABASE_URL = `file:${dbPath}`;
   process.env.NODE_ENV = isDev ? 'development' : 'production';
+  process.env.WEB_PATH = webPath; // Tell server where to find web files
   
   console.log('=== PharmaStream Server Startup ===');
   console.log('Database path:', dbPath);
+  console.log('Web path:', webPath);
   console.log('Database exists:', fs.existsSync(dbPath));
+  console.log('Web exists:', fs.existsSync(webPath));
   
   if (isDev) {
     const { spawn } = require('child_process');
@@ -88,8 +92,6 @@ async function startServer() {
     
     console.log('Server path:', serverDistPath);
     console.log('Server exists:', fs.existsSync(serverDistPath));
-    console.log('node_modules path:', nodeModulesPath);
-    console.log('node_modules exists:', fs.existsSync(nodeModulesPath));
     
     if (!fs.existsSync(serverDistPath)) {
       throw new Error(`Server not found: ${serverDistPath}`);
@@ -99,18 +101,14 @@ async function startServer() {
     process.env.NODE_PATH = nodeModulesPath;
     require('module').Module._initPaths();
     
-    // Load the server module
+    // Load and start the server
     console.log('Loading server module...');
     const serverModule = require(serverDistPath);
-    console.log('Server module loaded, exports:', Object.keys(serverModule));
     
-    // Start the server - the exported startServer function or express app
     if (typeof serverModule.startServer === 'function') {
       console.log('Calling startServer()...');
       await serverModule.startServer(PORT);
-      console.log('startServer() completed');
     } else if (serverModule.default && typeof serverModule.default.listen === 'function') {
-      console.log('Starting express app directly...');
       await new Promise((resolve) => {
         serverModule.default.listen(PORT, () => {
           console.log(`Express app listening on port ${PORT}`);
@@ -118,7 +116,7 @@ async function startServer() {
         });
       });
     } else {
-      throw new Error('Server module does not export startServer() or default express app');
+      throw new Error('Server module does not export startServer()');
     }
   }
   
@@ -146,19 +144,12 @@ function createWindow() {
   Menu.setApplicationMenu(null);
 
   if (isDev) {
+    // Development: load from Next.js dev server
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    const webPath = getWebPath();
-    const indexPath = path.join(webPath, 'index.html');
-    
-    if (!fs.existsSync(indexPath)) {
-      dialog.showErrorBox('Error', `Web files not found: ${indexPath}`);
-      app.quit();
-      return;
-    }
-    
-    mainWindow.loadFile(indexPath);
+    // Production: load from Express server (which serves static files)
+    mainWindow.loadURL('http://localhost:3001');
   }
 
   mainWindow.once('ready-to-show', () => {

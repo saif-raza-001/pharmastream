@@ -1,6 +1,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
+import path from 'path';
 import dotenv from 'dotenv';
 import productRoutes from './routes/productRoutes';
 import manufacturerRoutes from './routes/manufacturerRoutes';
@@ -20,14 +21,6 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 
 // Health check
-app.get('/', (req, res) => {
-  res.json({ 
-    message: "PharmaStream ERP Backend",
-    version: "1.6.0",
-    status: "healthy"
-  });
-});
-
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -42,6 +35,20 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportRoutes);
+
+// Serve static web files in production (for Electron)
+const webPath = process.env.WEB_PATH;
+if (webPath) {
+  console.log('Serving static files from:', webPath);
+  app.use(express.static(webPath));
+  
+  // Handle client-side routing - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api/')) {
+      res.sendFile(path.join(webPath, 'index.html'));
+    }
+  });
+}
 
 // Export for Electron integration
 export function startServer(port: number = 3001): Promise<void> {
