@@ -40,13 +40,14 @@
         "filter": ["**/*"]
       },
       {
-        "from": "../server/node_modules",
-        "to": "server/node_modules",
+        "from": "../../packages/database/node_modules/.prisma",
+        "to": "server/node_modules/.prisma",
         "filter": ["**/*"]
       },
       {
-        "from": "../server/package.json",
-        "to": "server/package.json"
+        "from": "../../packages/database/node_modules/@prisma",
+        "to": "server/node_modules/@prisma",
+        "filter": ["**/*"]
       },
       {
         "from": "../web/out",
