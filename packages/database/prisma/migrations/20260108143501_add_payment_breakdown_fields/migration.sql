@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "SalesInvoice" ADD COLUMN     "advanceUsed" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN     "netPayable" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN     "previousDue" DECIMAL(12,2) NOT NULL DEFAULT 0;

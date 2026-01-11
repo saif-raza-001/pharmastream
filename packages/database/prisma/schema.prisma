@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Manufacturer {
+  id         String    @id @default(cuid())
+  name       String
+  shortName  String?
+  address    String?
+  gstin      String?
+  createdAt  DateTime  @default(now())
+  products   Product[]
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+}
+
+model Product {
+  id                String          @id @default(cuid())
+  name              String
+  barcode           String?         @unique
+  saltComposition   String?
+  hsnCode           String?
+  manufacturerId    String
+  manufacturer      Manufacturer    @relation(fields: [manufacturerId], references: [id])
+  categoryId        String?
+  category          Category?       @relation(fields: [categoryId], references: [id])
+  packingInfo       String?
+  conversionFactor  Int             @default(1)
+  rackLocation      String?
+  gstRate           Float?          @default(12)
+  minStockAlert     Int?
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  batches           ProductBatch[]
+  invoiceItems      InvoiceItem[]
+  purchaseItems     PurchaseItem[]
+}
+
+model ProductBatch {
+  id            String        @id @default(cuid())
+  productId     String
+  product       Product       @relation(fields: [productId], references: [id])
+  batchNo       String
+  expiryDate    DateTime
+  mrp           Float
+  saleRate      Float
+  purchaseRate  Float
+  currentStock  Int           @default(0)
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  invoiceItems  InvoiceItem[]
+  purchaseItems PurchaseItem[]
+  @@unique([productId, batchNo])
+}
+
+model Account {
+  id              String        @id @default(cuid())
+  accountType     String
+  name            String
+  contactPerson   String?
+  mobile          String?
+  email           String?
+  address         String?
+  city            String?
+  state           String?
+  pincode         String?
+  gstin           String?
+  dlNumber        String?
+  panNumber       String?
+  creditLimit     Float?
+  creditDays      Int?
+  openingBalance  Float         @default(0)
+  currentBalance  Float         @default(0)
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  salesInvoices   SalesInvoice[]
+  purchases       Purchase[]
+  ledgerEntries   LedgerEntry[]
+}
+
+model SalesInvoice {
+  id              String        @id @default(cuid())
+  invoiceNo       Int           @unique
+  invoiceDate     DateTime      @default(now())
+  invoiceType     String
+  customerId      String
+  customer        Account       @relation(fields: [customerId], references: [id])
+  referenceNo     String?
+  billingAddress  String?
+  grossAmount     Float
+  totalDiscount   Float         @default(0)
+  taxableAmount   Float
+  cgstAmount      Float         @default(0)
+  sgstAmount      Float         @default(0)
+  igstAmount      Float         @default(0)
+  roundOff        Float         @default(0)
+  grandTotal      Float
+  previousDue     Float         @default(0)
+  advanceUsed     Float         @default(0)
+  netPayable      Float         @default(0)
+  paidAmount      Float         @default(0)
+  dueAmount       Float         @default(0)
+  paymentMode     String?
+  paymentRef      String?
+  createdBy       String?
+  createdAt       DateTime      @default(now())
+  items           InvoiceItem[]
+  ledgerEntries   LedgerEntry[]
+}
+
+model InvoiceItem {
+  id              String        @id @default(cuid())
+  invoiceId       String
+  invoice         SalesInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  batchId         String
+  batch           ProductBatch  @relation(fields: [batchId], references: [id])
+  quantity        Int
+  freeQuantity    Int           @default(0)
+  unitRate        Float
+  discountPct     Float         @default(0)
+  discountAmount  Float         @default(0)
+  taxableAmount   Float
+  gstPct          Float
+  gstAmount       Float
+  totalAmount     Float
+}
+
+model Purchase {
+  id              String         @id @default(cuid())
+  purchaseNo      Int            @unique
+  purchaseDate    DateTime       @default(now())
+  supplierId      String
+  supplier        Account        @relation(fields: [supplierId], references: [id])
+  billNo          String?
+  billDate        DateTime?
+  grossAmount     Float
+  totalDiscount   Float          @default(0)
+  taxableAmount   Float
+  cgstAmount      Float          @default(0)
+  sgstAmount      Float          @default(0)
+  igstAmount      Float          @default(0)
+  grandTotal      Float
+  createdAt       DateTime       @default(now())
+  items           PurchaseItem[]
+  ledgerEntries   LedgerEntry[]
+}
+
+model PurchaseItem {
+  id              String        @id @default(cuid())
+  purchaseId      String
+  purchase        Purchase      @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  batchId         String
+  batch           ProductBatch  @relation(fields: [batchId], references: [id])
+  quantity        Int
+  freeQuantity    Int           @default(0)
+  unitRate        Float
+  discountPct     Float         @default(0)
+  gstPct          Float
+  totalAmount     Float
+}
+
+model LedgerEntry {
+  id            String        @id @default(cuid())
+  entryDate     DateTime      @default(now())
+  entryType     String
+  accountId     String
+  account       Account       @relation(fields: [accountId], references: [id])
+  invoiceId     String?
+  salesInvoice  SalesInvoice? @relation(fields: [invoiceId], references: [id])
+  purchaseId    String?
+  purchase      Purchase?     @relation(fields: [purchaseId], references: [id])
+  debitAmount   Float         @default(0)
+  creditAmount  Float         @default(0)
+  narration     String?
+  createdAt     DateTime      @default(now())
+}
+
+model Counter {
+  id        String @id @default(cuid())
+  name      String @unique
+  value     Int    @default(0)
+}
+
+model Scheme {
+  id              String   @id @default(cuid())
+  name            String
+  schemeType      String
+  baseQuantity    Int
+  freeQuantity    Int
+  applicableFrom  DateTime
+  applicableTo    DateTime
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
+model User {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  password    String
+  fullName    String
+  role        String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model SystemSettings {
+  id                String   @id @default(cuid())
+  companyName       String
+  address           String?
+  city              String?
+  state             String?
+  pincode           String?
+  phone             String?
+  email             String?
+  gstin             String?
+  dlNumber20b       String?
+  dlNumber21b       String?
+  invoicePrefix     String   @default("INV")
+  thermalPrintWidth Int      @default(80)
+  updatedAt         DateTime @updatedAt
+}

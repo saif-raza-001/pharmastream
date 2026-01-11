@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+ignoredBuiltDependencies:
+  - '@prisma/client'
+
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - electron
+  - prisma
+  - sharp
+  - tesseract.js
+  - unrs-resolver

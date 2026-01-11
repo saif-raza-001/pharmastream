@@ -1,0 +1,25 @@
+{
+  "name": "pharmastream",
+  "version": "1.0.0",
+  "description": "Pharmaceutical Distribution ERP - Fast Billing & Inventory Management",
+  "private": true,
+  "scripts": {
+    "dev:server": "pnpm --filter server dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev": "pnpm run dev:server & pnpm run dev:web",
+    "dev:desktop": "pnpm run dev:server & pnpm run dev:web & sleep 5 && pnpm --filter pharmastream-desktop start",
+    "build": "pnpm -r build",
+    "build:desktop": "pnpm run build && pnpm --filter pharmastream-desktop build:win",
+    "db:generate": "pnpm --filter database db:generate",
+    "db:push": "pnpm --filter database db:push",
+    "db:studio": "pnpm --filter database db:studio",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
+  },
+  "keywords": ["pharma", "erp", "billing", "inventory"],
+  "author": "MD Saif Raza",
+  "license": "MIT",
+  "packageManager": "pnpm@10.27.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
