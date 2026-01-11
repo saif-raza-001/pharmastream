@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -19,6 +19,41 @@ const menuItems = [
 export default function Sidebar() {
   const [expanded, setExpanded] = useState(false);
   const pathname = usePathname();
+  const [currentPath, setCurrentPath] = useState('/');
+
+  useEffect(() => {
+    // Set initial path from window.location
+    setCurrentPath(window.location.pathname.replace(/\/$/, '') || '/');
+    
+    // Listen for navigation changes
+    const handleNavigation = () => {
+      setCurrentPath(window.location.pathname.replace(/\/$/, '') || '/');
+    };
+    
+    window.addEventListener('popstate', handleNavigation);
+    
+    // Also check periodically for SPA navigation
+    const interval = setInterval(() => {
+      const newPath = window.location.pathname.replace(/\/$/, '') || '/';
+      if (newPath !== currentPath) {
+        setCurrentPath(newPath);
+      }
+    }, 100);
+    
+    return () => {
+      window.removeEventListener('popstate', handleNavigation);
+      clearInterval(interval);
+    };
+  }, [currentPath]);
+
+  // Use pathname from Next.js or fallback to window.location
+  const activePath = pathname || currentPath;
+
+  const isActive = (href: string) => {
+    const normalizedHref = href.replace(/\/$/, '') || '/';
+    const normalizedPath = activePath.replace(/\/$/, '') || '/';
+    return normalizedHref === normalizedPath;
+  };
 
   return (
     <aside 
@@ -37,14 +72,14 @@ export default function Sidebar() {
       {/* Menu */}
       <nav className="flex-1 py-2">
         {menuItems.map((item) => {
-          const isActive = pathname === item.href;
+          const active = isActive(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
               className={`flex items-center h-10 px-4 mx-1 my-0.5 rounded transition-all ${
-                isActive
-                  ? 'bg-emerald-600 text-white'
+                active
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-white'
               }`}
             >
