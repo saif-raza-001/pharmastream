@@ -2,6 +2,7 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import productRoutes from './routes/productRoutes';
 import manufacturerRoutes from './routes/manufacturerRoutes';
@@ -38,14 +39,22 @@ app.use('/api/reports', reportRoutes);
 
 // Serve static web files in production (for Electron)
 const webPath = process.env.WEB_PATH;
-if (webPath) {
+if (webPath && fs.existsSync(webPath)) {
   console.log('Serving static files from:', webPath);
   app.use(express.static(webPath));
   
   // Handle client-side routing - serve index.html for all non-API routes
-  app.get('*', (req, res) => {
+  // Express 5 requires named parameter for wildcard
+  app.use((req, res, next) => {
     if (!req.path.startsWith('/api/')) {
-      res.sendFile(path.join(webPath, 'index.html'));
+      const indexPath = path.join(webPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        next();
+      }
+    } else {
+      next();
     }
   });
 }
