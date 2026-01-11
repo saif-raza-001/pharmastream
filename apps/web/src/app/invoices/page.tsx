@@ -33,7 +33,9 @@ export default function InvoicesPage() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentMode, setPaymentMode] = useState('CASH');
@@ -119,6 +121,27 @@ export default function InvoicesPage() {
       fetchInvoices();
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to process payment');
+    }
+  };
+
+  const handleOpenDelete = (invoice: any) => {
+    setSelectedInvoice(invoice);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!selectedInvoice) return;
+    setIsDeleting(true);
+    try {
+      await invoicesAPI.delete(selectedInvoice.id);
+      toast.success(`Invoice #${selectedInvoice.invoiceNo} deleted. Stock restored.`);
+      setShowDeleteModal(false);
+      setSelectedInvoice(null);
+      fetchInvoices();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to delete invoice');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -272,11 +295,12 @@ export default function InvoicesPage() {
                   )}
                 </td>
                 <td className="py-2 px-3 text-center">
-                  <button onClick={() => handleViewInvoice(inv)} className="text-blue-600 mx-1" title="View">👁️</button>
-                  <button onClick={() => handlePrintInvoice(inv)} className="text-gray-600 mx-1" title="Print">🖨️</button>
+                  <button onClick={() => handleViewInvoice(inv)} className="text-blue-600 mx-1 hover:bg-blue-50 p-1 rounded" title="View">👁️</button>
+                  <button onClick={() => handlePrintInvoice(inv)} className="text-gray-600 mx-1 hover:bg-gray-100 p-1 rounded" title="Print">🖨️</button>
                   {Number(inv.dueAmount) > 0 && (
-                    <button onClick={() => handleOpenPayment(inv)} className="text-green-600 mx-1" title="Payment">💰</button>
+                    <button onClick={() => handleOpenPayment(inv)} className="text-green-600 mx-1 hover:bg-green-50 p-1 rounded" title="Payment">💰</button>
                   )}
+                  <button onClick={() => handleOpenDelete(inv)} className="text-red-500 mx-1 hover:bg-red-50 p-1 rounded" title="Delete">🗑️</button>
                 </td>
               </tr>
             ))}
@@ -294,6 +318,7 @@ export default function InvoicesPage() {
         </div>
       )}
 
+      {/* View Invoice Modal */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
         <DialogContent className="bg-white max-w-2xl p-0 gap-0 max-h-[80vh] overflow-y-auto">
           <DialogHeader className="bg-purple-600 text-white px-4 py-3 sticky top-0">
@@ -338,12 +363,14 @@ export default function InvoicesPage() {
                 {Number(selectedInvoice.dueAmount) > 0 && (
                   <Button size="sm" onClick={() => { setShowViewModal(false); handleOpenPayment(selectedInvoice); }} className="bg-green-600">💰 Payment</Button>
                 )}
+                <Button size="sm" variant="outline" onClick={() => { setShowViewModal(false); handleOpenDelete(selectedInvoice); }} className="text-red-600 border-red-300 hover:bg-red-50">🗑️ Delete</Button>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
+      {/* Payment Modal */}
       <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
         <DialogContent className="bg-white max-w-md p-0 gap-0">
           <DialogHeader className="bg-green-600 text-white px-4 py-3">
@@ -380,6 +407,41 @@ export default function InvoicesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="bg-white max-w-md p-0 gap-0">
+          <DialogHeader className="bg-red-600 text-white px-4 py-3">
+            <DialogTitle className="text-sm">⚠️ Delete Invoice</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 space-y-4">
+            <div className="bg-red-50 border border-red-200 p-4 rounded-lg text-center">
+              <div className="text-lg font-bold text-red-700">Invoice #{selectedInvoice?.invoiceNo}</div>
+              <div className="text-sm text-red-600 mt-1">{selectedInvoice?.customer?.name}</div>
+              <div className="text-2xl font-bold text-red-700 mt-2">{formatCurrency(selectedInvoice?.grandTotal || 0)}</div>
+            </div>
+            
+            <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+              <p className="text-xs text-yellow-800">
+                <b>⚠️ Warning:</b> This will permanently delete the invoice and:
+              </p>
+              <ul className="text-xs text-yellow-700 mt-2 space-y-1 list-disc list-inside">
+                <li>Restore all sold items back to inventory</li>
+                <li>Remove all payment records for this invoice</li>
+                <li>Update customer balance accordingly</li>
+              </ul>
+            </div>
+            
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Cancel</Button>
+              <Button onClick={handleDeleteInvoice} disabled={isDeleting} className="flex-1 bg-red-600 hover:bg-red-700">
+                {isDeleting ? 'Deleting...' : '🗑️ Delete Invoice'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Modal */}
       <Dialog open={showPrintModal} onOpenChange={setShowPrintModal}>
         <DialogContent className="bg-white max-w-5xl max-h-[90vh] overflow-y-auto p-0">
           <DialogHeader className="bg-purple-600 text-white px-4 py-3 sticky top-0">

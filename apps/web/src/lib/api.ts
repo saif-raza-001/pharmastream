@@ -30,6 +30,7 @@ export const invoicesAPI = {
   getRecent: () => api.get('/invoices/recent'),
   receivePayment: (id: string, data: { amount: number; mode: string; reference?: string }) => 
     api.post(`/invoices/${id}/payment`, data),
+  delete: (id: string) => api.delete(`/invoices/${id}`),
 };
 
 export const purchasesAPI = {

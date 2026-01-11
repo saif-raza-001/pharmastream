@@ -15,8 +15,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
+// Helper: Calculate net amount (with GST included)
+const calculateNetAmount = (qty: number, rate: number, discountPct: number, gstPct: number): number => {
+  const baseAmount = qty * rate;
+  const discountAmount = baseAmount * (discountPct / 100);
+  const taxableAmount = baseAmount - discountAmount;
+  const gstAmount = taxableAmount * (gstPct / 100);
+  return taxableAmount + gstAmount;
+};
+
 export default function BillingPage() {
-  const { customer, items, invoiceType, setCustomer, addItem, removeItem, clearBill, getTotals } = useBillingStore();
+  const { customer, items, invoiceType, setCustomer, addItem, updateItem, removeItem, clearBill, getTotals } = useBillingStore();
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerResults, setCustomerResults] = useState<any[]>([]);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
@@ -33,19 +42,19 @@ export default function BillingPage() {
   const [discount, setDiscount] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Recent invoices
+  const [editingCell, setEditingCell] = useState<{index: number, field: 'quantity' | 'unitRate' | 'discountPct' | 'gstPct'} | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+  
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   const [selectedViewInvoice, setSelectedViewInvoice] = useState<any>(null);
   const [showViewInvoiceModal, setShowViewInvoiceModal] = useState(false);
 
-  // Payment form
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentMode, setPaymentMode] = useState('CASH');
   const [paymentRef, setPaymentRef] = useState('');
   const [useAdvance, setUseAdvance] = useState(false);
   const [advanceToUse, setAdvanceToUse] = useState(0);
 
-  // New Customer Form
   const [newCustomerForm, setNewCustomerForm] = useState({
     name: '',
     mobile: '',
@@ -61,6 +70,7 @@ export default function BillingPage() {
   const newCustomerNameRef = useRef<HTMLInputElement>(null);
   const paymentInputRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const totals = getTotals();
 
   useHotkeys('f2', () => productInputRef.current?.focus(), { preventDefault: true });
@@ -68,13 +78,17 @@ export default function BillingPage() {
   useHotkeys('f10', () => handleInitiateSave(), { preventDefault: true });
   useHotkeys('ctrl+p', () => savedInvoice && handlePrint(), { preventDefault: true });
   useHotkeys('escape', () => { 
-    setShowBatchModal(false); 
-    setShowProductSearch(false); 
-    setShowCustomerSearch(false);
-    setShowAddCustomerModal(false);
-    setShowPaymentModal(false);
-    setShowPrintModal(false);
-    setShowViewInvoiceModal(false);
+    if (editingCell) {
+      handleEditCancel();
+    } else {
+      setShowBatchModal(false); 
+      setShowProductSearch(false); 
+      setShowCustomerSearch(false);
+      setShowAddCustomerModal(false);
+      setShowPaymentModal(false);
+      setShowPrintModal(false);
+      setShowViewInvoiceModal(false);
+    }
   });
 
   useEffect(() => {
@@ -120,12 +134,107 @@ export default function BillingPage() {
     }
   }, [showPaymentModal]);
 
+  useEffect(() => {
+    if (editingCell && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingCell]);
+
   const fetchRecentInvoices = async () => {
     try {
       const res = await invoicesAPI.getRecent();
       setRecentInvoices(res.data);
     } catch (err) {
       console.error('Failed to fetch recent invoices');
+    }
+  };
+
+  // ========== INLINE EDIT HANDLERS ==========
+  const handleEditStart = (index: number, field: 'quantity' | 'unitRate' | 'discountPct' | 'gstPct', currentValue: number) => {
+    setEditingCell({ index, field });
+    setEditValue(currentValue.toString());
+  };
+
+  const handleEditSave = () => {
+    if (!editingCell) return;
+    const { index, field } = editingCell;
+    const item = items[index];
+    const newValue = parseFloat(editValue) || 0;
+    
+    if (field === 'quantity' && newValue <= 0) {
+      toast.error("Quantity must be greater than 0");
+      return;
+    }
+    if (field === 'discountPct' && (newValue < 0 || newValue > 100)) {
+      toast.error("Discount must be between 0-100%");
+      return;
+    }
+    if (field === 'unitRate' && newValue < 0) {
+      toast.error("Rate cannot be negative");
+      return;
+    }
+    if (field === 'gstPct' && (newValue < 0 || newValue > 28)) {
+      toast.error("GST must be between 0-28%");
+      return;
+    }
+    
+    const newQuantity = field === 'quantity' ? newValue : item.quantity;
+    const newUnitRate = field === 'unitRate' ? newValue : item.unitRate;
+    const newDiscountPct = field === 'discountPct' ? newValue : item.discountPct;
+    const newGstPct = field === 'gstPct' ? newValue : item.gstPct;
+    
+    // Calculate NET amount (includes GST)
+    const newAmount = calculateNetAmount(newQuantity, newUnitRate, newDiscountPct, newGstPct);
+    
+    updateItem(index, {
+      [field]: newValue,
+      amount: newAmount
+    });
+    
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  const handleEditCancel = () => {
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  const handleQuantityChange = (index: number, delta: number) => {
+    const item = items[index];
+    const newQuantity = Math.max(1, item.quantity + delta);
+    const newAmount = calculateNetAmount(newQuantity, item.unitRate, item.discountPct, item.gstPct);
+    
+    updateItem(index, {
+      quantity: newQuantity,
+      amount: newAmount
+    });
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleEditSave();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleEditCancel();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      handleEditSave();
+      if (editingCell) {
+        const { index, field } = editingCell;
+        const fields: ('quantity' | 'unitRate' | 'discountPct' | 'gstPct')[] = ['quantity', 'unitRate', 'discountPct', 'gstPct'];
+        const currentFieldIndex = fields.indexOf(field);
+        if (currentFieldIndex < fields.length - 1) {
+          const nextField = fields[currentFieldIndex + 1];
+          const item = items[index];
+          setTimeout(() => handleEditStart(index, nextField, item[nextField]), 50);
+        } else if (index < items.length - 1) {
+          const nextItem = items[index + 1];
+          setTimeout(() => handleEditStart(index + 1, 'quantity', nextItem.quantity), 50);
+        }
+      }
     }
   };
 
@@ -188,8 +297,11 @@ export default function BillingPage() {
     if (quantity <= 0) { toast.error("Enter quantity"); return; }
     if (batch.currentStock < quantity) { toast.error(`Only ${batch.currentStock} available`); return; }
     
-    // Use product's actual GST rate or default to 12%
     const gstRate = Number(selectedProduct.gstRate) || 12;
+    const unitRate = Number(batch.saleRate);
+    
+    // Calculate NET amount (includes GST)
+    const netAmount = calculateNetAmount(quantity, unitRate, discount, gstRate);
     
     addItem({
       id: `${Date.now()}`,
@@ -200,10 +312,10 @@ export default function BillingPage() {
       expiry: new Date(batch.expiryDate).toLocaleDateString('en-IN', { month: '2-digit', year: '2-digit' }),
       quantity,
       freeQuantity: 0,
-      unitRate: Number(batch.saleRate),
+      unitRate: unitRate,
       discountPct: discount,
-      gstPct: gstRate, // Dynamic GST from product
-      amount: quantity * Number(batch.saleRate) * (1 - discount / 100),
+      gstPct: gstRate,
+      amount: netAmount, // Now includes GST
       mrp: Number(batch.mrp)
     });
     
@@ -211,11 +323,10 @@ export default function BillingPage() {
     setSelectedProduct(null);
     setQuantity(1);
     setDiscount(0);
-    toast.success(`Added (GST: ${gstRate}%)`);
+    toast.success(`Added (GST: ${gstRate}% included)`);
     setTimeout(() => productInputRef.current?.focus(), 50);
   };
 
-  // Calculate customer balance info
   const customerBalance = customer?.currentBalance || 0;
   const hasAdvance = customerBalance < 0;
   const advanceAvailable = hasAdvance ? Math.abs(customerBalance) : 0;
@@ -225,11 +336,9 @@ export default function BillingPage() {
     if (!customer) { toast.error("Select customer (F3)"); return; }
     if (items.length === 0) { toast.error("Add items (F2)"); return; }
     
-    // Reset payment form
     setUseAdvance(false);
     setAdvanceToUse(0);
     
-    // Set default payment amount based on invoice type
     if (invoiceType === 'CASH') {
       setPaymentAmount(totals.grandTotal);
     } else {
@@ -240,7 +349,6 @@ export default function BillingPage() {
     setShowPaymentModal(true);
   };
 
-  // Calculate amounts for payment modal
   const effectiveAdvance = useAdvance ? Math.min(advanceToUse, advanceAvailable, totals.grandTotal) : 0;
   const remainingToPay = totals.grandTotal - effectiveAdvance;
   const dueAfterPayment = remainingToPay - paymentAmount;
@@ -251,11 +359,20 @@ export default function BillingPage() {
     setIsSaving(true);
     
     try {
+      // For backend, we still need to send the totals structure it expects
+      const backendTotals = {
+        grossAmount: totals.subtotal,
+        totalDiscount: totals.totalDiscount,
+        taxableAmount: totals.subtotal - totals.totalDiscount,
+        gstAmount: totals.grandTotal - (totals.subtotal - totals.totalDiscount), // Derived GST
+        grandTotal: totals.grandTotal
+      };
+      
       const res = await invoicesAPI.create({ 
         customerId: customer.id, 
         invoiceType, 
         items, 
-        totals,
+        totals: backendTotals,
         payment: {
           amount: paymentAmount,
           advanceUsed: effectiveAdvance,
@@ -268,7 +385,7 @@ export default function BillingPage() {
       
       setSavedInvoice({
         ...res.data,
-        totals,
+        totals: backendTotals,
         items: [...items],
         customer: customerRes.data,
         payment: { 
@@ -280,15 +397,9 @@ export default function BillingPage() {
       });
       
       let successMsg = `Invoice #${res.data.invoiceNo} saved!`;
-      if (effectiveAdvance > 0) {
-        successMsg += ` Advance used: ₹${effectiveAdvance}`;
-      }
-      if (paymentAmount > 0) {
-        successMsg += ` Received: ₹${paymentAmount}`;
-      }
-      if (dueAfterPayment > 0) {
-        successMsg += ` Due: ₹${dueAfterPayment.toFixed(2)}`;
-      }
+      if (effectiveAdvance > 0) successMsg += ` Advance used: ₹${effectiveAdvance}`;
+      if (paymentAmount > 0) successMsg += ` Received: ₹${paymentAmount}`;
+      if (dueAfterPayment > 0) successMsg += ` Due: ₹${dueAfterPayment.toFixed(2)}`;
       toast.success(successMsg);
       
       setShowPaymentModal(false);
@@ -319,10 +430,8 @@ export default function BillingPage() {
     const invoiceForPrint = {
       ...selectedViewInvoice,
       totals: {
-        grossAmount: Number(selectedViewInvoice.grossAmount),
+        subtotal: Number(selectedViewInvoice.grossAmount),
         totalDiscount: Number(selectedViewInvoice.totalDiscount),
-        taxableAmount: Number(selectedViewInvoice.taxableAmount),
-        gstAmount: Number(selectedViewInvoice.cgstAmount) + Number(selectedViewInvoice.sgstAmount),
         grandTotal: Number(selectedViewInvoice.grandTotal)
       },
       items: selectedViewInvoice.items.map((item: any) => ({
@@ -462,7 +571,6 @@ export default function BillingPage() {
               </div>
             )}
             
-            {/* Customer Balance Badge */}
             {customer && (
               <div className={`absolute right-0 top-0 text-[10px] px-1.5 py-0.5 rounded ${
                 hasDue ? 'bg-orange-100 text-orange-700' : 
@@ -477,7 +585,6 @@ export default function BillingPage() {
           </div>
         </div>
         
-        {/* Advance Available Banner */}
         {customer && hasAdvance && (
           <div className="mt-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -527,7 +634,7 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* Items Table */}
+      {/* Items Table - Amount now shows NET (with GST) */}
       <div className="flex-1 overflow-auto bg-white" style={{ maxHeight: 'calc(100vh - 320px)' }}>
         <table className="w-full text-xs">
           <thead className="bg-gray-50 sticky top-0">
@@ -535,11 +642,11 @@ export default function BillingPage() {
               <th className="w-10 py-2 px-2 text-left">#</th>
               <th className="py-2 px-2 text-left">Product</th>
               <th className="w-20 py-2 px-2">Batch</th>
-              <th className="w-14 py-2 px-2 text-center">Qty</th>
-              <th className="w-20 py-2 px-2 text-right">Rate</th>
-              <th className="w-14 py-2 px-2 text-center">Disc%</th>
-              <th className="w-14 py-2 px-2 text-center">GST%</th>
-              <th className="w-20 py-2 px-2 text-right">Amount</th>
+              <th className="w-28 py-2 px-2 text-center">Qty</th>
+              <th className="w-24 py-2 px-2 text-right">Rate</th>
+              <th className="w-20 py-2 px-2 text-center">Disc%</th>
+              <th className="w-16 py-2 px-2 text-center">GST%</th>
+              <th className="w-24 py-2 px-2 text-right">Net Amt</th>
               <th className="w-10"></th>
             </tr>
           </thead>
@@ -551,13 +658,134 @@ export default function BillingPage() {
                 <tr key={item.id} className="border-b hover:bg-gray-50">
                   <td className="py-1.5 px-2 text-gray-500">{i + 1}</td>
                   <td className="py-1.5 px-2 font-medium">{item.productName}</td>
-                  <td className="py-1.5 px-2 text-center">{item.batchNo}</td>
-                  <td className="py-1.5 px-2 text-center font-semibold">{item.quantity}</td>
-                  <td className="py-1.5 px-2 text-right">₹{item.unitRate.toFixed(2)}</td>
-                  <td className="py-1.5 px-2 text-center text-orange-600">{item.discountPct}%</td>
-                  <td className="py-1.5 px-2 text-center text-purple-600 font-semibold">{item.gstPct}%</td>
-                  <td className="py-1.5 px-2 text-right font-bold">₹{item.amount.toFixed(2)}</td>
-                  <td className="py-1.5 px-2"><button onClick={() => removeItem(i)} className="text-red-400">✕</button></td>
+                  <td className="py-1.5 px-2 text-center text-[10px]">{item.batchNo}</td>
+                  
+                  {/* EDITABLE QUANTITY */}
+                  <td className="py-1.5 px-1">
+                    <div className="flex items-center justify-center gap-0.5">
+                      <button 
+                        onClick={() => handleQuantityChange(i, -1)}
+                        className="w-6 h-6 bg-gray-200 hover:bg-red-100 hover:text-red-600 rounded text-sm font-bold transition-colors"
+                      >
+                        −
+                      </button>
+                      {editingCell?.index === i && editingCell?.field === 'quantity' ? (
+                        <input
+                          ref={editInputRef}
+                          type="number"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={handleEditSave}
+                          onKeyDown={handleEditKeyDown}
+                          className="w-12 h-6 text-xs text-center border border-blue-400 rounded outline-none focus:ring-1 focus:ring-blue-400"
+                          min={1}
+                        />
+                      ) : (
+                        <span 
+                          onClick={() => handleEditStart(i, 'quantity', item.quantity)}
+                          className="w-10 h-6 flex items-center justify-center cursor-pointer hover:bg-blue-100 rounded font-semibold transition-colors"
+                        >
+                          {item.quantity}
+                        </span>
+                      )}
+                      <button 
+                        onClick={() => handleQuantityChange(i, 1)}
+                        className="w-6 h-6 bg-gray-200 hover:bg-green-100 hover:text-green-600 rounded text-sm font-bold transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </td>
+                  
+                  {/* EDITABLE RATE */}
+                  <td className="py-1.5 px-2 text-right">
+                    {editingCell?.index === i && editingCell?.field === 'unitRate' ? (
+                      <input
+                        ref={editInputRef}
+                        type="number"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={handleEditSave}
+                        onKeyDown={handleEditKeyDown}
+                        className="w-20 h-6 text-xs text-right border border-blue-400 rounded outline-none focus:ring-1 focus:ring-blue-400 pr-1"
+                        step="0.01"
+                        min={0}
+                      />
+                    ) : (
+                      <span 
+                        onClick={() => handleEditStart(i, 'unitRate', item.unitRate)}
+                        className="cursor-pointer hover:bg-blue-100 rounded px-1 py-0.5 transition-colors inline-block"
+                      >
+                        ₹{item.unitRate.toFixed(2)}
+                      </span>
+                    )}
+                  </td>
+                  
+                  {/* EDITABLE DISCOUNT */}
+                  <td className="py-1.5 px-2 text-center">
+                    {editingCell?.index === i && editingCell?.field === 'discountPct' ? (
+                      <input
+                        ref={editInputRef}
+                        type="number"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={handleEditSave}
+                        onKeyDown={handleEditKeyDown}
+                        className="w-14 h-6 text-xs text-center border border-blue-400 rounded outline-none focus:ring-1 focus:ring-blue-400"
+                        step="0.5"
+                        min={0}
+                        max={100}
+                      />
+                    ) : (
+                      <span 
+                        onClick={() => handleEditStart(i, 'discountPct', item.discountPct)}
+                        className={`cursor-pointer hover:bg-blue-100 rounded px-1 py-0.5 transition-colors inline-block ${item.discountPct > 0 ? 'text-orange-600 font-semibold' : 'text-gray-400'}`}
+                      >
+                        {item.discountPct}%
+                      </span>
+                    )}
+                  </td>
+                  
+                  {/* EDITABLE GST% */}
+                  <td className="py-1.5 px-2 text-center">
+                    {editingCell?.index === i && editingCell?.field === 'gstPct' ? (
+                      <input
+                        ref={editInputRef}
+                        type="number"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={handleEditSave}
+                        onKeyDown={handleEditKeyDown}
+                        className="w-14 h-6 text-xs text-center border border-purple-400 rounded outline-none focus:ring-1 focus:ring-purple-400"
+                        step="1"
+                        min={0}
+                        max={28}
+                      />
+                    ) : (
+                      <span 
+                        onClick={() => handleEditStart(i, 'gstPct', item.gstPct)}
+                        className="cursor-pointer hover:bg-purple-100 rounded px-1.5 py-0.5 transition-colors inline-block text-purple-600 font-semibold bg-purple-50"
+                      >
+                        {item.gstPct}%
+                      </span>
+                    )}
+                  </td>
+                  
+                  {/* NET AMOUNT (includes GST) */}
+                  <td className="py-1.5 px-2 text-right">
+                    <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
+                      ₹{item.amount.toFixed(2)}
+                    </span>
+                  </td>
+                  
+                  <td className="py-1.5 px-2">
+                    <button 
+                      onClick={() => removeItem(i)} 
+                      className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -565,15 +793,18 @@ export default function BillingPage() {
         </table>
       </div>
 
-      {/* Footer Summary */}
+      {/* Footer Summary - SIMPLIFIED (no GST breakdown) */}
       <div className="bg-white border-t px-4 py-2 shrink-0">
         <div className="flex justify-between items-center">
           <div className="flex gap-4 text-xs">
             <span>Items: <b>{items.length}</b></span>
             <span>Qty: <b>{items.reduce((s, i) => s + i.quantity, 0)}</b></span>
-            <span>Gross: <b>₹{totals.grossAmount.toFixed(2)}</b></span>
-            <span className="text-orange-600">Disc: ₹{totals.totalDiscount.toFixed(2)}</span>
-            <span className="text-blue-600">GST: ₹{totals.gstAmount.toFixed(2)}</span>
+            {totals.totalDiscount > 0 && (
+              <>
+                <span>Subtotal: <b>₹{totals.subtotal.toFixed(2)}</b></span>
+                <span className="text-orange-600">Disc: -₹{totals.totalDiscount.toFixed(2)}</span>
+              </>
+            )}
           </div>
           <div className="bg-emerald-600 text-white px-6 py-2 rounded">
             <span className="text-emerald-200 text-xs mr-2">Total:</span>
@@ -637,7 +868,7 @@ export default function BillingPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Batch Selection Modal - Shows GST Rate */}
+      {/* Batch Selection Modal */}
       <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
         <DialogContent className="bg-white max-w-xl p-0 gap-0">
           <DialogHeader className="bg-emerald-600 text-white px-4 py-3">
@@ -697,13 +928,12 @@ export default function BillingPage() {
             <DialogTitle className="text-sm font-semibold">Payment Details</DialogTitle>
           </DialogHeader>
           <div className="p-4 space-y-4">
-            {/* Grand Total */}
             <div className="bg-emerald-50 p-4 rounded-lg text-center">
               <div className="text-sm text-emerald-600">Bill Amount</div>
               <div className="text-3xl font-bold text-emerald-700">₹{totals.grandTotal.toFixed(2)}</div>
+              <div className="text-[10px] text-emerald-500 mt-1">(All prices include GST)</div>
             </div>
 
-            {/* Advance Available */}
             {hasAdvance && (
               <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
                 <div className="flex items-center justify-between">
@@ -744,7 +974,6 @@ export default function BillingPage() {
               </div>
             )}
 
-            {/* Remaining to Pay */}
             {effectiveAdvance > 0 && (
               <div className="bg-blue-50 p-3 rounded-lg text-center">
                 <div className="text-sm text-blue-600">Remaining to Pay</div>
@@ -752,7 +981,6 @@ export default function BillingPage() {
               </div>
             )}
 
-            {/* Payment Mode */}
             <div>
               <label className="text-xs text-gray-500 uppercase mb-1 block">Payment Mode</label>
               <div className="grid grid-cols-4 gap-2">
@@ -772,9 +1000,8 @@ export default function BillingPage() {
               </div>
             </div>
 
-            {/* Amount Received */}
             <div>
-              <label className="text-xs text-gray-500 uppercase mb-1 block">Amount Received (Cash/UPI/Card)</label>
+              <label className="text-xs text-gray-500 uppercase mb-1 block">Amount Received</label>
               <Input 
                 ref={paymentInputRef}
                 type="number" 
@@ -785,7 +1012,6 @@ export default function BillingPage() {
               />
             </div>
 
-            {/* Reference */}
             {paymentMode !== 'CASH' && paymentMode !== 'CREDIT' && (
               <div>
                 <label className="text-xs text-gray-500 uppercase mb-1 block">Reference / Txn ID</label>
@@ -793,7 +1019,6 @@ export default function BillingPage() {
               </div>
             )}
 
-            {/* Due Amount */}
             {dueAfterPayment > 0 && (
               <div className="bg-orange-50 p-3 rounded-lg text-center">
                 <div className="text-sm text-orange-600">Due Amount</div>
@@ -801,7 +1026,6 @@ export default function BillingPage() {
               </div>
             )}
 
-            {/* Overpayment (Advance) */}
             {dueAfterPayment < 0 && (
               <div className="bg-green-50 p-3 rounded-lg text-center">
                 <div className="text-sm text-green-600">New Advance (Overpayment)</div>
@@ -809,7 +1033,6 @@ export default function BillingPage() {
               </div>
             )}
 
-            {/* Actions */}
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setShowPaymentModal(false)}>Cancel</Button>
               <Button onClick={handleSaveBill} disabled={isSaving} className="flex-1 bg-emerald-600 hover:bg-emerald-700">
@@ -842,7 +1065,7 @@ export default function BillingPage() {
                     <th className="p-2 text-center border">Qty</th>
                     <th className="p-2 text-right border">Rate</th>
                     <th className="p-2 text-center border">GST%</th>
-                    <th className="p-2 text-right border">Amount</th>
+                    <th className="p-2 text-right border">Net Amt</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -861,7 +1084,7 @@ export default function BillingPage() {
 
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div className="space-y-1">
-                  <div className="flex justify-between"><span>Grand Total:</span><b>₹{Number(selectedViewInvoice.grandTotal).toFixed(2)}</b></div>
+                  <div className="flex justify-between"><span>Total:</span><b>₹{Number(selectedViewInvoice.grandTotal).toFixed(2)}</b></div>
                   <div className="flex justify-between"><span>Paid:</span><span className="text-green-600">₹{Number(selectedViewInvoice.paidAmount).toFixed(2)}</span></div>
                   <div className="flex justify-between"><span>Due:</span><span className="text-orange-600 font-bold">₹{Number(selectedViewInvoice.dueAmount).toFixed(2)}</span></div>
                 </div>

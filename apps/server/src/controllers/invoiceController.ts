@@ -368,3 +368,78 @@ export const receivePayment = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to process payment' });
   }
 };
+
+// DELETE INVOICE - Restores stock and reverses ledger entries
+export const deleteInvoice = async (req: Request, res: Response) => {
+  try {
+    const id = getParam(req.params.id);
+    
+    // Get invoice with items
+    const invoice = await prisma.salesInvoice.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        ledgerEntries: true
+      }
+    });
+    
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    
+    await prisma.$transaction(async (tx) => {
+      // 1. Restore stock for each item
+      for (const item of invoice.items) {
+        await tx.productBatch.update({
+          where: { id: item.batchId },
+          data: {
+            currentStock: {
+              increment: item.quantity + item.freeQuantity
+            }
+          }
+        });
+      }
+      
+      // 2. Calculate balance reversal
+      // Original: balance increased by (grandTotal - advanceUsed - paidAmount)
+      // Now: reverse that change
+      const grandTotal = Number(invoice.grandTotal);
+      const advanceUsed = Number(invoice.advanceUsed);
+      const paidAmount = Number(invoice.paidAmount);
+      const balanceToReverse = grandTotal - advanceUsed - paidAmount;
+      
+      // 3. Update customer balance (reverse the original change)
+      await tx.account.update({
+        where: { id: invoice.customerId },
+        data: {
+          currentBalance: {
+            decrement: balanceToReverse
+          }
+        }
+      });
+      
+      // 4. Delete ledger entries for this invoice
+      await tx.ledgerEntry.deleteMany({
+        where: { invoiceId: id }
+      });
+      
+      // 5. Delete invoice items (cascade should handle this, but being explicit)
+      await tx.invoiceItem.deleteMany({
+        where: { invoiceId: id }
+      });
+      
+      // 6. Delete the invoice
+      await tx.salesInvoice.delete({
+        where: { id }
+      });
+    });
+    
+    res.json({ 
+      success: true, 
+      message: `Invoice #${invoice.invoiceNo} deleted successfully. Stock restored.`
+    });
+  } catch (error) {
+    console.error('Delete invoice error:', error);
+    res.status(500).json({ error: 'Failed to delete invoice' });
+  }
+};

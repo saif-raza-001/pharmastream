@@ -34,7 +34,14 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [editMode, setEditMode] = useState(false);
 
-  // Product Form with ALL fields including GST
+  // Inline add forms inside Add Product modal
+  const [showInlineMfgForm, setShowInlineMfgForm] = useState(false);
+  const [showInlineCatForm, setShowInlineCatForm] = useState(false);
+  const [inlineMfgName, setInlineMfgName] = useState('');
+  const [inlineCatName, setInlineCatName] = useState('');
+  const [savingInlineMfg, setSavingInlineMfg] = useState(false);
+  const [savingInlineCat, setSavingInlineCat] = useState(false);
+
   const [productForm, setProductForm] = useState({
     name: '', 
     barcode: '', 
@@ -61,7 +68,6 @@ export default function ProductsPage() {
   const [catForm, setCatForm] = useState({ name: '', description: '' });
   const [csvData, setCsvData] = useState('');
 
-  // Quick Entry - ENHANCED with rack location & category
   const [quickProducts, setQuickProducts] = useState<any[]>([]);
   const [existingBatches, setExistingBatches] = useState<any[]>([]);
   const quickBarcodeRef = useRef<HTMLInputElement>(null);
@@ -78,6 +84,8 @@ export default function ProductsPage() {
   const quickPRateRef = useRef<HTMLInputElement>(null);
   const quickMrpRef = useRef<HTMLInputElement>(null);
   const quickSRateRef = useRef<HTMLInputElement>(null);
+  const inlineMfgInputRef = useRef<HTMLInputElement>(null);
+  const inlineCatInputRef = useRef<HTMLInputElement>(null);
 
   const [quickForm, setQuickForm] = useState({
     barcode: '', 
@@ -108,6 +116,18 @@ export default function ProductsPage() {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    if (showInlineMfgForm && inlineMfgInputRef.current) {
+      setTimeout(() => inlineMfgInputRef.current?.focus(), 100);
+    }
+  }, [showInlineMfgForm]);
+
+  useEffect(() => {
+    if (showInlineCatForm && inlineCatInputRef.current) {
+      setTimeout(() => inlineCatInputRef.current?.focus(), 100);
+    }
+  }, [showInlineCatForm]);
+
   const fetchProducts = async () => {
     setLoadingProducts(true);
     try {
@@ -125,6 +145,53 @@ export default function ProductsPage() {
 
   const fetchCategories = async () => {
     try { const res = await categoriesAPI.getAll(); setCategories(res.data); } catch (err) {}
+  };
+
+  // Inline add manufacturer from product modal
+  const handleInlineAddMfg = async () => {
+    if (!inlineMfgName.trim()) {
+      toast.error('Enter manufacturer name');
+      return;
+    }
+    setSavingInlineMfg(true);
+    try {
+      const res = await manufacturersAPI.create({ 
+        name: inlineMfgName.trim(), 
+        shortName: inlineMfgName.trim().substring(0, 10) 
+      });
+      toast.success(`Manufacturer "${res.data.name}" added`);
+      await fetchManufacturers();
+      setProductForm({ ...productForm, manufacturerId: res.data.id });
+      setInlineMfgName('');
+      setShowInlineMfgForm(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to add manufacturer');
+    } finally {
+      setSavingInlineMfg(false);
+    }
+  };
+
+  // Inline add category from product modal
+  const handleInlineAddCat = async () => {
+    if (!inlineCatName.trim()) {
+      toast.error('Enter category name');
+      return;
+    }
+    setSavingInlineCat(true);
+    try {
+      const res = await categoriesAPI.create({ 
+        name: inlineCatName.trim() 
+      });
+      toast.success(`Category "${res.data.name}" added`);
+      await fetchCategories();
+      setProductForm({ ...productForm, categoryId: res.data.id });
+      setInlineCatName('');
+      setShowInlineCatForm(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to add category');
+    } finally {
+      setSavingInlineCat(false);
+    }
   };
 
   const handleSaveProduct = async () => {
@@ -222,6 +289,10 @@ export default function ProductsPage() {
     setAddInitialStock(false);
     setSelectedProduct(null);
     setEditMode(false);
+    setShowInlineMfgForm(false);
+    setShowInlineCatForm(false);
+    setInlineMfgName('');
+    setInlineCatName('');
   };
 
   const handleSaveManufacturer = async () => {
@@ -298,14 +369,12 @@ export default function ProductsPage() {
     }
   };
 
-  // ENHANCED Quick Entry with Rack & GST
   const handleQuickBarcodeScan = async () => {
     if (!quickForm.barcode) return;
     
     try {
       const res = await productsAPI.getByBarcode(quickForm.barcode);
       
-      // Product found - Fill ALL product info including rack & GST
       toast.success(`Found: ${res.data.name}`);
       
       setQuickForm(prev => ({
@@ -392,7 +461,6 @@ export default function ProductsPage() {
     }
 
     try {
-      // Find or create manufacturer
       let mfg = manufacturers.find(m => m.name.toLowerCase() === quickForm.manufacturer.toLowerCase());
       if (!mfg) {
         const mfgRes = await manufacturersAPI.create({ 
@@ -403,7 +471,6 @@ export default function ProductsPage() {
         fetchManufacturers();
       }
 
-      // Find or create category
       let categoryId = null;
       if (quickForm.category) {
         let cat = categories.find(c => c.name.toLowerCase() === quickForm.category.toLowerCase());
@@ -417,7 +484,6 @@ export default function ProductsPage() {
         categoryId = cat.id;
       }
 
-      // Check if product exists by barcode
       let productId = null;
       if (quickForm.barcode) {
         try {
@@ -427,7 +493,6 @@ export default function ProductsPage() {
       }
 
       if (!productId) {
-        // Create new product with rack location & GST
         const productRes = await productsAPI.create({
           name: quickForm.name,
           barcode: quickForm.barcode || null,
@@ -443,7 +508,6 @@ export default function ProductsPage() {
         toast.info("New product created");
       }
 
-      // Add batch/stock
       await productsAPI.addBatch({
         productId,
         batchNo: quickForm.batchNo,
@@ -456,14 +520,12 @@ export default function ProductsPage() {
 
       toast.success(`✓ Added: ${quickForm.name} | Batch: ${quickForm.batchNo} | Qty: ${quickForm.qty}`);
       
-      // Add to recent entries
       setQuickProducts([{
         ...quickForm,
         timestamp: new Date().toLocaleTimeString(),
         id: Date.now()
       }, ...quickProducts.slice(0, 19)]);
 
-      // Clear form
       setQuickForm({ 
         barcode: '', name: '', manufacturer: '', category: '', salt: '', 
         packing: '', rackLocation: '', gstRate: 12,
@@ -477,6 +539,10 @@ export default function ProductsPage() {
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Failed");
     }
+  };
+
+  const calculateNetPrice = (rate: number, gstPct: number): number => {
+    return rate * (1 + gstPct / 100);
   };
 
   return (
@@ -527,11 +593,10 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* ENHANCED Quick Entry Tab with Rack & Category */}
+      {/* Quick Entry Tab */}
       {activeTab === 'quickentry' && (
         <div className="flex-1 overflow-auto bg-white p-4">
           <div className="max-w-7xl mx-auto">
-            {/* Instructions */}
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mb-4">
               <h3 className="text-sm font-bold text-blue-800 mb-2">⚡ Quick Stock Entry - Professional Mode</h3>
               <div className="grid grid-cols-3 gap-4 text-xs text-gray-700">
@@ -562,7 +627,6 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            {/* Show existing batches if product found */}
             {existingBatches.length > 0 && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                 <p className="text-xs font-semibold text-yellow-800 mb-2">📋 Existing Batches for Reference:</p>
@@ -579,9 +643,7 @@ export default function ProductsPage() {
               </div>
             )}
 
-            {/* Entry Form */}
             <div className="bg-white border-2 border-gray-300 rounded-lg p-4 mb-4">
-              {/* Row 1: Product Info */}
               <div className="grid grid-cols-12 gap-3 mb-3">
                 <div className="col-span-2">
                   <label className="text-[10px] text-gray-500 uppercase font-bold">Barcode (Scan/Type)</label>
@@ -654,7 +716,6 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* Row 2: Packing, Rack, GST */}
               <div className="grid grid-cols-12 gap-3 mb-3 pb-3 border-b">
                 <div className="col-span-2">
                   <label className="text-[10px] text-gray-500 uppercase font-bold">Packing</label>
@@ -704,7 +765,6 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* Row 3: Stock Details */}
               <div className="grid grid-cols-12 gap-3">
                 <div className="col-span-2">
                   <label className="text-[10px] text-gray-500 uppercase font-bold text-red-600">Batch No * (NEW)</label>
@@ -801,7 +861,6 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex justify-between items-center mt-4 pt-3 border-t">
                 <div className="text-xs text-gray-500">
                   <span className="font-semibold">Navigation:</span> Tab / Enter • 
@@ -835,7 +894,6 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            {/* Recent Entries */}
             {quickProducts.length > 0 && (
               <div className="border-2 rounded-lg overflow-hidden">
                 <div className="bg-gradient-to-r from-gray-100 to-gray-50 px-4 py-2 border-b">
@@ -885,7 +943,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Products Tab - WITH RACK LOCATION */}
+      {/* Products Tab */}
       {activeTab === 'products' && (
         <>
           <div className="bg-gray-50 px-4 py-2 border-b shrink-0 flex gap-4">
@@ -907,55 +965,75 @@ export default function ProductsPage() {
             <table className="w-full text-xs">
               <thead className="bg-gray-50 sticky top-0">
                 <tr className="border-b">
-                  <th className="w-10 py-2 px-2 text-left font-semibold text-gray-600">#</th>
-                  <th className="w-28 py-2 px-2 text-left font-semibold text-gray-600">Barcode</th>
+                  <th className="w-8 py-2 px-2 text-left font-semibold text-gray-600">#</th>
                   <th className="py-2 px-2 text-left font-semibold text-gray-600">Product Name</th>
-                  <th className="py-2 px-2 text-left font-semibold text-gray-600">Salt</th>
                   <th className="w-24 py-2 px-2 text-left font-semibold text-gray-600">Company</th>
                   <th className="w-16 py-2 px-2 text-center font-semibold text-purple-600">📍 Rack</th>
                   <th className="w-12 py-2 px-2 text-center font-semibold text-gray-600">GST%</th>
                   <th className="w-16 py-2 px-2 text-right font-semibold text-gray-600">Stock</th>
                   <th className="w-16 py-2 px-2 text-right font-semibold text-gray-600">Rate</th>
+                  <th className="w-20 py-2 px-2 text-right font-semibold text-emerald-600">💰 Net Price</th>
                   <th className="w-20 py-2 px-2 text-center font-semibold text-gray-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loadingProducts ? (
-                  <tr><td colSpan={10} className="text-center py-10 text-gray-400">Loading...</td></tr>
+                  <tr><td colSpan={9} className="text-center py-10 text-gray-400">Loading...</td></tr>
                 ) : products.length === 0 ? (
-                  <tr><td colSpan={10} className="text-center py-10 text-gray-400">No products found</td></tr>
+                  <tr><td colSpan={9} className="text-center py-10 text-gray-400">No products found</td></tr>
                 ) : (
-                  products.map((p, i) => (
-                    <tr key={p.id} className="border-b hover:bg-gray-50">
-                      <td className="py-1.5 px-2 text-gray-500">{i + 1}</td>
-                      <td className="py-1.5 px-2 text-gray-500 font-mono text-[10px]">{p.barcode || '-'}</td>
-                      <td className="py-1.5 px-2 font-medium">{p.name}</td>
-                      <td className="py-1.5 px-2 text-gray-600">{p.saltComposition || '-'}</td>
-                      <td className="py-1.5 px-2 text-gray-600">{p.manufacturer?.shortName || p.manufacturer?.name}</td>
-                      <td className="py-1.5 px-2 text-center">
-                        {p.rackLocation ? (
-                          <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-xs font-bold">
-                            {p.rackLocation}
+                  products.map((p, i) => {
+                    const rate = p.avgRate || 0;
+                    const gst = p.gstRate || 12;
+                    const netPrice = calculateNetPrice(rate, gst);
+                    
+                    return (
+                      <tr key={p.id} className="border-b hover:bg-gray-50">
+                        <td className="py-1.5 px-2 text-gray-500">{i + 1}</td>
+                        <td className="py-1.5 px-2">
+                          <div className="font-medium">{p.name}</div>
+                          <div className="text-[10px] text-gray-400">{p.saltComposition || '-'}</div>
+                        </td>
+                        <td className="py-1.5 px-2 text-gray-600 text-[10px]">{p.manufacturer?.shortName || p.manufacturer?.name}</td>
+                        <td className="py-1.5 px-2 text-center">
+                          {p.rackLocation ? (
+                            <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                              {p.rackLocation}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-2 text-center">
+                          <span className="bg-blue-50 text-blue-700 px-1 py-0.5 rounded text-[10px] font-semibold">{gst}%</span>
+                        </td>
+                        <td className={`py-1.5 px-2 text-right font-semibold ${p.totalStock === 0 ? 'text-red-600' : p.totalStock < 50 ? 'text-orange-600' : 'text-green-600'}`}>
+                          {p.totalStock}
+                        </td>
+                        <td className="py-1.5 px-2 text-right text-gray-600">₹{rate.toFixed(2)}</td>
+                        <td className="py-1.5 px-2 text-right">
+                          <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
+                            ₹{netPrice.toFixed(2)}
                           </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="py-1.5 px-2 text-center font-semibold">{p.gstRate || 12}%</td>
-                      <td className={`py-1.5 px-2 text-right font-semibold ${p.totalStock === 0 ? 'text-red-600' : p.totalStock < 50 ? 'text-orange-600' : 'text-green-600'}`}>
-                        {p.totalStock}
-                      </td>
-                      <td className="py-1.5 px-2 text-right">₹{p.avgRate?.toFixed(2) || '0.00'}</td>
-                      <td className="py-1.5 px-2 text-center">
-                        <button onClick={() => handleViewProduct(p)} className="text-blue-600 hover:text-blue-800 mx-1">👁️</button>
-                        <button onClick={() => handleEditProduct(p)} className="text-gray-600 hover:text-gray-800 mx-1">✏️</button>
-                        <button onClick={() => handleDeleteProduct(p.id)} className="text-red-400 hover:text-red-600 mx-1">🗑️</button>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="py-1.5 px-2 text-center">
+                          <button onClick={() => handleViewProduct(p)} className="text-blue-600 hover:text-blue-800 mx-1" title="View">👁️</button>
+                          <button onClick={() => handleEditProduct(p)} className="text-gray-600 hover:text-gray-800 mx-1" title="Edit">✏️</button>
+                          <button onClick={() => handleDeleteProduct(p.id)} className="text-red-400 hover:text-red-600 mx-1" title="Delete">🗑️</button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
+          </div>
+          
+          <div className="bg-gray-50 px-4 py-2 border-t shrink-0">
+            <div className="flex gap-6 text-[10px] text-gray-500">
+              <span><b>Rate</b> = Selling price (without GST)</span>
+              <span><b className="text-emerald-600">💰 Net Price</b> = Rate + GST (what buyer actually pays)</span>
+            </div>
           </div>
         </>
       )}
@@ -1076,8 +1154,16 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Product Modal - WITH RACK & GST */}
-      <Dialog open={showProductModal} onOpenChange={setShowProductModal}>
+      {/* Product Modal - WITH INLINE ADD FOR MANUFACTURER & CATEGORY */}
+      <Dialog open={showProductModal} onOpenChange={(open) => {
+        setShowProductModal(open);
+        if (!open) {
+          setShowInlineMfgForm(false);
+          setShowInlineCatForm(false);
+          setInlineMfgName('');
+          setInlineCatName('');
+        }
+      }}>
         <DialogContent className="bg-white max-w-xl p-0 gap-0 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="bg-blue-600 text-white px-4 py-3 sticky top-0 z-10">
             <DialogTitle className="text-sm font-semibold">{editMode ? 'Edit Product' : 'Add New Product'}</DialogTitle>
@@ -1101,21 +1187,140 @@ export default function ProductsPage() {
               <Input value={productForm.saltComposition} onChange={e => setProductForm({...productForm, saltComposition: e.target.value})} className="h-8 text-xs" />
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
-              <div>
+            {/* MANUFACTURER with inline add */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
                 <label className="text-[10px] text-gray-500 uppercase">Manufacturer *</label>
-                <select value={productForm.manufacturerId} onChange={e => setProductForm({...productForm, manufacturerId: e.target.value})} className="w-full h-8 text-xs border rounded px-2">
-                  <option value="">Select...</option>
+                {!showInlineMfgForm && (
+                  <button 
+                    type="button"
+                    onClick={() => setShowInlineMfgForm(true)} 
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold"
+                  >
+                    ➕ Add New
+                  </button>
+                )}
+              </div>
+              
+              {showInlineMfgForm ? (
+                <div className="bg-blue-50 border border-blue-200 rounded p-2 space-y-2">
+                  <div className="flex gap-2">
+                    <Input 
+                      ref={inlineMfgInputRef}
+                      value={inlineMfgName} 
+                      onChange={e => setInlineMfgName(e.target.value)} 
+                      placeholder="New manufacturer name"
+                      className="h-8 text-xs flex-1"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleInlineAddMfg();
+                        } else if (e.key === 'Escape') {
+                          setShowInlineMfgForm(false);
+                          setInlineMfgName('');
+                        }
+                      }}
+                    />
+                    <Button 
+                      size="sm" 
+                      className="h-8 text-xs bg-blue-600"
+                      onClick={handleInlineAddMfg}
+                      disabled={savingInlineMfg}
+                    >
+                      {savingInlineMfg ? '...' : '✓ Add'}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => {
+                        setShowInlineMfgForm(false);
+                        setInlineMfgName('');
+                      }}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-blue-600">Press Enter to add, Escape to cancel</p>
+                </div>
+              ) : (
+                <select 
+                  value={productForm.manufacturerId} 
+                  onChange={e => setProductForm({...productForm, manufacturerId: e.target.value})} 
+                  className="w-full h-8 text-xs border rounded px-2"
+                >
+                  <option value="">Select manufacturer...</option>
                   {manufacturers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
-              </div>
-              <div>
+              )}
+            </div>
+            
+            {/* CATEGORY with inline add */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
                 <label className="text-[10px] text-gray-500 uppercase">Category</label>
-                <select value={productForm.categoryId} onChange={e => setProductForm({...productForm, categoryId: e.target.value})} className="w-full h-8 text-xs border rounded px-2">
-                  <option value="">Select...</option>
+                {!showInlineCatForm && (
+                  <button 
+                    type="button"
+                    onClick={() => setShowInlineCatForm(true)} 
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold"
+                  >
+                    ➕ Add New
+                  </button>
+                )}
+              </div>
+              
+              {showInlineCatForm ? (
+                <div className="bg-green-50 border border-green-200 rounded p-2 space-y-2">
+                  <div className="flex gap-2">
+                    <Input 
+                      ref={inlineCatInputRef}
+                      value={inlineCatName} 
+                      onChange={e => setInlineCatName(e.target.value)} 
+                      placeholder="New category name"
+                      className="h-8 text-xs flex-1"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleInlineAddCat();
+                        } else if (e.key === 'Escape') {
+                          setShowInlineCatForm(false);
+                          setInlineCatName('');
+                        }
+                      }}
+                    />
+                    <Button 
+                      size="sm" 
+                      className="h-8 text-xs bg-green-600"
+                      onClick={handleInlineAddCat}
+                      disabled={savingInlineCat}
+                    >
+                      {savingInlineCat ? '...' : '✓ Add'}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => {
+                        setShowInlineCatForm(false);
+                        setInlineCatName('');
+                      }}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-green-600">Press Enter to add, Escape to cancel</p>
+                </div>
+              ) : (
+                <select 
+                  value={productForm.categoryId} 
+                  onChange={e => setProductForm({...productForm, categoryId: e.target.value})} 
+                  className="w-full h-8 text-xs border rounded px-2"
+                >
+                  <option value="">Select category...</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-              </div>
+              )}
             </div>
             
             <div className="grid grid-cols-4 gap-3">
@@ -1199,7 +1404,7 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* View Product Modal - WITH RACK LOCATION */}
+      {/* View Product Modal */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
         <DialogContent className="bg-white max-w-2xl p-0 gap-0">
           <DialogHeader className="bg-gray-100 px-4 py-3 border-b flex flex-row items-center justify-between">
@@ -1239,22 +1444,30 @@ export default function ProductsPage() {
                   <th className="py-2 px-2 text-right border">P.Rate</th>
                   <th className="py-2 px-2 text-right border">MRP</th>
                   <th className="py-2 px-2 text-right border">S.Rate</th>
+                  <th className="py-2 px-2 text-right border text-emerald-600">Net Price</th>
                 </tr>
               </thead>
               <tbody>
                 {selectedProduct?.batches?.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-4 text-gray-400">No batches</td></tr>
+                  <tr><td colSpan={7} className="text-center py-4 text-gray-400">No batches</td></tr>
                 ) : (
-                  selectedProduct?.batches?.map((b: any) => (
-                    <tr key={b.id} className="border-t">
-                      <td className="py-1.5 px-2 border">{b.batchNo}</td>
-                      <td className="py-1.5 px-2 border">{new Date(b.expiryDate).toLocaleDateString('en-IN')}</td>
-                      <td className="py-1.5 px-2 text-right border font-semibold">{b.currentStock}</td>
-                      <td className="py-1.5 px-2 text-right border">₹{Number(b.purchaseRate).toFixed(2)}</td>
-                      <td className="py-1.5 px-2 text-right border">₹{Number(b.mrp).toFixed(2)}</td>
-                      <td className="py-1.5 px-2 text-right border font-semibold">₹{Number(b.saleRate).toFixed(2)}</td>
-                    </tr>
-                  ))
+                  selectedProduct?.batches?.map((b: any) => {
+                    const gst = selectedProduct?.gstRate || 12;
+                    const netPrice = Number(b.saleRate) * (1 + gst / 100);
+                    return (
+                      <tr key={b.id} className="border-t">
+                        <td className="py-1.5 px-2 border">{b.batchNo}</td>
+                        <td className="py-1.5 px-2 border">{new Date(b.expiryDate).toLocaleDateString('en-IN')}</td>
+                        <td className="py-1.5 px-2 text-right border font-semibold">{b.currentStock}</td>
+                        <td className="py-1.5 px-2 text-right border">₹{Number(b.purchaseRate).toFixed(2)}</td>
+                        <td className="py-1.5 px-2 text-right border">₹{Number(b.mrp).toFixed(2)}</td>
+                        <td className="py-1.5 px-2 text-right border font-semibold">₹{Number(b.saleRate).toFixed(2)}</td>
+                        <td className="py-1.5 px-2 text-right border">
+                          <span className="bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded font-bold">₹{netPrice.toFixed(2)}</span>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1262,7 +1475,7 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Other modals remain unchanged... */}
+      {/* Manufacturer Modal */}
       <Dialog open={showManufacturerModal} onOpenChange={setShowManufacturerModal}>
         <DialogContent className="bg-white max-w-md p-0 gap-0">
           <DialogHeader className="bg-blue-600 text-white px-4 py-3">
@@ -1285,6 +1498,7 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Category Modal */}
       <Dialog open={showCategoryModal} onOpenChange={setShowCategoryModal}>
         <DialogContent className="bg-white max-w-md p-0 gap-0">
           <DialogHeader className="bg-blue-600 text-white px-4 py-3">
@@ -1307,6 +1521,7 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Batch Modal */}
       <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
         <DialogContent className="bg-white max-w-md p-0 gap-0">
           <DialogHeader className="bg-emerald-600 text-white px-4 py-3">
@@ -1349,6 +1564,7 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Import Modal */}
       <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
         <DialogContent className="bg-white max-w-2xl p-0 gap-0">
           <DialogHeader className="bg-blue-600 text-white px-4 py-3">

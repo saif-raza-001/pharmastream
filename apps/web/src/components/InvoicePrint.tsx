@@ -18,22 +18,14 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
 
   if (!settings) return <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>;
 
-  // Calculate totals from items if not provided
-  const totals = invoice.totals || {
-    grossAmount: Number(invoice.grossAmount) || items.reduce((sum, item) => sum + Number(item.amount || item.totalAmount || 0), 0),
-    totalDiscount: Number(invoice.totalDiscount) || 0,
-    taxableAmount: Number(invoice.taxableAmount) || 0,
-    gstAmount: Number(invoice.cgstAmount || 0) + Number(invoice.sgstAmount || 0),
-    grandTotal: Number(invoice.grandTotal) || 0
-  };
-  
-  if (!totals.taxableAmount) totals.taxableAmount = totals.grossAmount - totals.totalDiscount;
-  if (!totals.grandTotal) totals.grandTotal = totals.taxableAmount + totals.gstAmount;
-  
-  const cgst = totals.gstAmount / 2;
-  const sgst = totals.gstAmount / 2;
+  // Calculate totals - Amount now includes GST
+  const subtotal = items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitRate)), 0);
+  const totalDiscount = Number(invoice.totalDiscount) || items.reduce((sum, item) => {
+    return sum + (Number(item.quantity) * Number(item.unitRate) * Number(item.discountPct) / 100);
+  }, 0);
+  const grandTotal = Number(invoice.grandTotal) || items.reduce((sum, item) => sum + Number(item.amount || item.totalAmount || 0), 0);
 
-  // Payment details - try from invoice.payment first, then from database fields
+  // Payment details
   const payment = invoice.payment || {};
   const advanceUsed = Number(payment.advanceUsed || invoice.advanceUsed || 0);
   const previousDue = Number(payment.previousDue || invoice.previousDue || 0);
@@ -41,11 +33,9 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
   const paymentMode = payment.mode || invoice.paymentMode || 'CASH';
   const dueAmount = Number(invoice.dueAmount || 0);
   
-  // Calculate net payable
-  const netPayable = totals.grandTotal + previousDue - advanceUsed;
+  const netPayable = grandTotal + previousDue - advanceUsed;
   const balanceDue = netPayable - paidAmount;
 
-  // Inline styles for print compatibility
   const styles = {
     container: {
       backgroundColor: '#ffffff',
@@ -203,6 +193,12 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
       paddingTop: '5px',
       fontSize: '9px',
     },
+    gstNote: {
+      fontSize: '8px',
+      color: '#666',
+      fontStyle: 'italic' as const,
+      marginTop: '5px',
+    },
   };
 
   return (
@@ -240,12 +236,12 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
         </div>
       </div>
 
-      {/* Items Table */}
+      {/* Items Table - Amount is NET (includes GST) */}
       <table style={styles.table}>
         <thead>
           <tr style={styles.tableHeader}>
             <th style={{...styles.th, width: '25px'}}>#</th>
-            <th style={{...styles.thLeft, width: '160px'}}>Product</th>
+            <th style={{...styles.thLeft, width: '180px'}}>Product</th>
             <th style={{...styles.th, width: '60px'}}>Batch</th>
             <th style={{...styles.th, width: '45px'}}>Exp</th>
             <th style={{...styles.th, width: '35px'}}>Qty</th>
@@ -253,7 +249,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
             <th style={{...styles.thRight, width: '50px'}}>Rate</th>
             <th style={{...styles.th, width: '35px'}}>D%</th>
             <th style={{...styles.th, width: '35px'}}>GST%</th>
-            <th style={{...styles.thRight, width: '60px'}}>Amount</th>
+            <th style={{...styles.thRight, width: '70px'}}>Net Amt</th>
           </tr>
         </thead>
         <tbody>
@@ -271,39 +267,39 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
               <td style={styles.tdRight}>₹{Number(item.unitRate).toFixed(2)}</td>
               <td style={styles.td}>{Number(item.discountPct)}%</td>
               <td style={styles.td}>{Number(item.gstPct)}%</td>
-              <td style={{...styles.tdRight, fontWeight: 'bold'}}>₹{Number(item.amount || item.totalAmount).toFixed(2)}</td>
+              <td style={{...styles.tdRight, fontWeight: 'bold', backgroundColor: '#f0fff0'}}>₹{Number(item.amount || item.totalAmount).toFixed(2)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* Summary & Payment */}
+      {/* Summary & Payment - SIMPLIFIED */}
       <div style={styles.summaryRow}>
         {/* Amount in Words */}
         <div style={styles.amountWords}>
           <p style={{fontWeight: 'bold', marginBottom: '5px', fontSize: '9px'}}>Amount in Words:</p>
-          <p style={{fontSize: '10px'}}>{numberToWords(Math.round(netPayable > 0 ? netPayable : totals.grandTotal))} Rupees Only</p>
+          <p style={{fontSize: '10px'}}>{numberToWords(Math.round(netPayable > 0 ? netPayable : grandTotal))} Rupees Only</p>
+          <p style={styles.gstNote}>* All amounts are inclusive of GST</p>
         </div>
 
-        {/* Totals */}
+        {/* Totals - SIMPLIFIED */}
         <div style={styles.totalsBox}>
-          <div style={styles.totalRow}>
-            <span>Gross Amount:</span>
-            <span style={{fontWeight: 'bold'}}>₹{totals.grossAmount.toFixed(2)}</span>
-          </div>
-          {totals.totalDiscount > 0 && (
-            <div style={styles.totalRow}>
-              <span>Discount:</span>
-              <span>-₹{totals.totalDiscount.toFixed(2)}</span>
-            </div>
+          {totalDiscount > 0 && (
+            <>
+              <div style={styles.totalRow}>
+                <span>Subtotal:</span>
+                <span>₹{subtotal.toFixed(2)}</span>
+              </div>
+              <div style={{...styles.totalRow, color: '#dc3545'}}>
+                <span>Discount:</span>
+                <span>-₹{totalDiscount.toFixed(2)}</span>
+              </div>
+            </>
           )}
-          <div style={styles.totalRow}>
-            <span>CGST + SGST:</span>
-            <span>₹{totals.gstAmount.toFixed(2)}</span>
-          </div>
-          <div style={{...styles.totalRow, fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: '5px'}}>
+          
+          <div style={{...styles.totalRow, fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: '5px', fontSize: '12px'}}>
             <span>Bill Amount:</span>
-            <span>₹{totals.grandTotal.toFixed(2)}</span>
+            <span>₹{grandTotal.toFixed(2)}</span>
           </div>
           
           {/* Show Previous Due if added */}
@@ -377,7 +373,6 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
   );
 }
 
-// Helper function to convert number to words
 function numberToWords(num: number): string {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];

@@ -21,7 +21,7 @@ interface BillingItem {
   unitRate: number;
   discountPct: number;
   gstPct: number;
-  amount: number;
+  amount: number; // Now includes GST (Net Amount)
   mrp: number;
 }
 
@@ -44,11 +44,9 @@ interface BillingStore {
   clearBill: () => void;
   
   getTotals: () => {
-    grossAmount: number;
-    totalDiscount: number;
-    taxableAmount: number;
-    gstAmount: number;
-    grandTotal: number;
+    subtotal: number;      // Sum of (qty × rate) before discount
+    totalDiscount: number; // Total discount amount
+    grandTotal: number;    // Final amount (all net amounts with GST)
   };
 }
 
@@ -78,15 +76,18 @@ export const useBillingStore = create<BillingStore>((set, get) => ({
   
   getTotals: () => {
     const items = get().items;
-    const grossAmount = items.reduce((sum, item) => sum + (item.quantity * item.unitRate), 0);
-    const totalDiscount = items.reduce((sum, item) => sum + (item.quantity * item.unitRate * item.discountPct / 100), 0);
-    const taxableAmount = grossAmount - totalDiscount;
-    const gstAmount = items.reduce((sum, item) => {
-      const itemTaxable = (item.quantity * item.unitRate) * (1 - item.discountPct / 100);
-      return sum + (itemTaxable * item.gstPct / 100);
-    }, 0);
-    const grandTotal = taxableAmount + gstAmount;
     
-    return { grossAmount, totalDiscount, taxableAmount, gstAmount, grandTotal };
+    // Subtotal = sum of (qty × rate) - before any discount or GST
+    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitRate), 0);
+    
+    // Total discount amount
+    const totalDiscount = items.reduce((sum, item) => {
+      return sum + (item.quantity * item.unitRate * item.discountPct / 100);
+    }, 0);
+    
+    // Grand Total = sum of all item amounts (which now include GST)
+    const grandTotal = items.reduce((sum, item) => sum + item.amount, 0);
+    
+    return { subtotal, totalDiscount, grandTotal };
   }
 }));
