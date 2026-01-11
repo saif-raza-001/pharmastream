@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog } = require('electron');
+const { app, BrowserWindow, Menu, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -59,11 +59,10 @@ async function startServer() {
   const webPath = getWebPath();
   const PORT = 3001;
   
-  // Set environment variables
   process.env.PORT = String(PORT);
   process.env.DATABASE_URL = `file:${dbPath}`;
   process.env.NODE_ENV = isDev ? 'development' : 'production';
-  process.env.WEB_PATH = webPath; // Tell server where to find web files
+  process.env.WEB_PATH = webPath;
   
   console.log('=== PharmaStream Server Startup ===');
   console.log('Database path:', dbPath);
@@ -97,11 +96,9 @@ async function startServer() {
       throw new Error(`Server not found: ${serverDistPath}`);
     }
     
-    // Add server's node_modules to module resolution path
     process.env.NODE_PATH = nodeModulesPath;
     require('module').Module._initPaths();
     
-    // Load and start the server
     console.log('Loading server module...');
     const serverModule = require(serverDistPath);
     
@@ -136,19 +133,25 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      devTools: true
     },
     show: false
   });
 
   Menu.setApplicationMenu(null);
 
+  // Register keyboard shortcut to open DevTools
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' || (input.control && input.shift && input.key === 'I')) {
+      mainWindow.webContents.toggleDevTools();
+    }
+  });
+
   if (isDev) {
-    // Development: load from Next.js dev server
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    // Production: load from Express server (which serves static files)
     mainWindow.loadURL('http://localhost:3001');
   }
 
