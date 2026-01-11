@@ -9,6 +9,12 @@ const getString = (value: any): string | undefined => {
   return undefined;
 };
 
+const getParam = (value: string | string[] | undefined): string => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0] || '';
+  return '';
+};
+
 const getNumber = (value: any, defaultVal: number): number => {
   const str = getString(value);
   if (!str) return defaultVal;
@@ -255,7 +261,7 @@ export const getInvoices = async (req: Request, res: Response) => {
 
 export const getInvoiceById = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
 
     const invoice = await prisma.salesInvoice.findUnique({
       where: { id },
@@ -298,7 +304,7 @@ export const getRecentInvoices = async (req: Request, res: Response) => {
 
 export const receivePayment = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const { amount, mode, reference } = req.body;
     
     const paymentAmount = Number(amount);

@@ -2,6 +2,12 @@ import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
 import { getNextNumber } from '../utils/counter';
 
+const getParam = (value: string | string[] | undefined): string => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0] || '';
+  return '';
+};
+
 // Create Purchase Entry with Smart Batch Management
 export const createPurchase = async (req: Request, res: Response) => {
   try {
@@ -151,7 +157,7 @@ export const getPurchases = async (req: Request, res: Response) => {
 // Get single purchase
 export const getPurchaseById = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const purchase = await prisma.purchase.findUnique({
       where: { id },
       include: {

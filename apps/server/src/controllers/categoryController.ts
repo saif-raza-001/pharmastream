@@ -1,6 +1,12 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
 
+const getParam = (value: string | string[] | undefined): string => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0] || '';
+  return '';
+};
+
 export const getCategories = async (req: Request, res: Response) => {
   try {
     const categories = await prisma.category.findMany({
@@ -29,7 +35,7 @@ export const createCategory = async (req: Request, res: Response) => {
 
 export const updateCategory = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const { name, description } = req.body;
     const category = await prisma.category.update({
       where: { id },
@@ -43,7 +49,7 @@ export const updateCategory = async (req: Request, res: Response) => {
 
 export const deleteCategory = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const productsCount = await prisma.product.count({ where: { categoryId: id } });
     if (productsCount > 0) {
       return res.status(400).json({ error: `Cannot delete. ${productsCount} products linked.` });

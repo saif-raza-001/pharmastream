@@ -7,6 +7,12 @@ const getString = (value: any): string | undefined => {
   return undefined;
 };
 
+const getParam = (value: string | string[] | undefined): string => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0] || '';
+  return '';
+};
+
 export const getAccounts = async (req: Request, res: Response) => {
   try {
     const type = getString(req.query.type);
@@ -38,7 +44,7 @@ export const getAccounts = async (req: Request, res: Response) => {
 
 export const getAccountById = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const account = await prisma.account.findUnique({
       where: { id },
       include: {
@@ -89,7 +95,7 @@ export const createAccount = async (req: Request, res: Response) => {
 
 export const updateAccount = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const { name, contactPerson, mobile, email, address, city, state, pincode, gstin, dlNumber, creditLimit, creditDays } = req.body;
     
     const account = await prisma.account.update({
@@ -118,7 +124,7 @@ export const updateAccount = async (req: Request, res: Response) => {
 
 export const deleteAccount = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     
     await prisma.account.update({
       where: { id },
@@ -133,7 +139,7 @@ export const deleteAccount = async (req: Request, res: Response) => {
 
 export const getAccountLedger = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const from = getString(req.query.from);
     const to = getString(req.query.to);
     
@@ -289,7 +295,7 @@ export const getAccountStats = async (req: Request, res: Response) => {
 
 export const getAccountStatement = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const from = getString(req.query.from);
     const to = getString(req.query.to);
     

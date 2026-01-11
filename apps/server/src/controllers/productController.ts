@@ -8,6 +8,12 @@ const getString = (value: any): string | undefined => {
   return undefined;
 };
 
+const getParam = (value: string | string[] | undefined): string => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0] || '';
+  return '';
+};
+
 const getNumber = (value: any, defaultVal: number): number => {
   const str = getString(value);
   if (!str) return defaultVal;
@@ -89,7 +95,7 @@ export const getProducts = async (req: Request, res: Response) => {
 
 export const getProductByBarcode = async (req: Request, res: Response) => {
   try {
-    const { barcode } = req.params;
+    const barcode = getParam(req.params.barcode);
     
     const product = await prisma.product.findFirst({
       where: { barcode: barcode, isActive: true },
@@ -115,7 +121,7 @@ export const getProductByBarcode = async (req: Request, res: Response) => {
 
 export const getProductById = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const product = await prisma.product.findUnique({
       where: { id },
       include: {
@@ -170,7 +176,7 @@ export const createProduct = async (req: Request, res: Response) => {
 
 export const updateProduct = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     const { name, barcode, saltComposition, hsnCode, manufacturerId, categoryId, packingInfo, conversionFactor, rackLocation, gstRate, minStockAlert, isActive } = req.body;
     
     if (barcode) {
@@ -208,7 +214,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 
 export const deleteProduct = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params.id);
     await prisma.product.update({
       where: { id },
       data: { isActive: false }
