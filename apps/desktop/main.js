@@ -1,124 +1,69 @@
 const { app, BrowserWindow, Menu } = require('electron');
 const path = require('path');
-const { spawn, fork } = require('child_process');
-const http = require('http');
 const fs = require('fs');
 
 let mainWindow;
-let serverProcess;
 
 const isDev = !app.isPackaged;
 
-// Paths
-const getServerPath = () => {
-  if (isDev) {
-    return path.join(__dirname, '..', 'server');
-  }
-  return path.join(process.resourcesPath, 'server');
-};
-
-const getWebPath = () => {
-  if (isDev) {
-    return path.join(__dirname, '..', 'web', 'out');
-  }
-  return path.join(process.resourcesPath, 'web');
-};
-
-const getDatabasePath = () => {
-  if (isDev) {
-    return path.join(__dirname, '..', '..', 'data', 'pharmastream.db');
-  }
-  // In production, store in user data directory
-  const userDataPath = app.getPath('userData');
-  const dbPath = path.join(userDataPath, 'pharmastream.db');
+// Set database path before anything else
+function setupDatabase() {
+  let dbPath;
   
-  // Copy default database if it doesn't exist
-  if (!fs.existsSync(dbPath)) {
-    const defaultDb = path.join(process.resourcesPath, 'data', 'pharmastream.db');
-    if (fs.existsSync(defaultDb)) {
-      fs.copyFileSync(defaultDb, dbPath);
-    }
+  if (isDev) {
+    dbPath = path.join(__dirname, '..', '..', 'data', 'pharmastream.db');
+  } else {
+    const userDataPath = app.getPath('userData');
+    dbPath = path.join(userDataPath, 'pharmastream.db');
   }
   
+  // Ensure directory exists
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  
+  // Set environment variable for Prisma
+  process.env.DATABASE_URL = `file:${dbPath}`;
+  process.env.PORT = '3001';
+  
+  console.log('Database path:', dbPath);
   return dbPath;
-};
-
-// Wait for server to be ready
-function waitForServer(port, timeout = 30000) {
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now();
-    
-    const checkServer = () => {
-      const req = http.request({ host: 'localhost', port, path: '/api/settings', method: 'GET' }, (res) => {
-        resolve();
-      });
-      
-      req.on('error', () => {
-        if (Date.now() - startTime > timeout) {
-          reject(new Error('Server startup timeout'));
-        } else {
-          setTimeout(checkServer, 500);
-        }
-      });
-      
-      req.end();
-    };
-    
-    checkServer();
-  });
 }
 
 async function startServer() {
-  const serverPath = getServerPath();
-  const dbPath = getDatabasePath();
-  
-  console.log('Server path:', serverPath);
-  console.log('Database path:', dbPath);
-  
-  const env = {
-    ...process.env,
-    PORT: '3001',
-    DATABASE_URL: `file:${dbPath}`,
-    NODE_ENV: isDev ? 'development' : 'production'
-  };
-
-  if (isDev) {
-    // Development: use ts-node
-    serverProcess = spawn('npx', ['ts-node', 'src/index.ts'], {
-      cwd: serverPath,
-      env,
-      shell: true,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-  } else {
-    // Production: use compiled JS
-    const nodeExecutable = process.execPath;
-    serverProcess = spawn(nodeExecutable, [path.join(serverPath, 'dist', 'index.js')], {
-      cwd: serverPath,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
+  try {
+    let serverPath;
+    
+    if (isDev) {
+      // Development: use ts-node (won't work, use npm run dev separately)
+      console.log('Development mode: Please run server separately with npm run dev');
+      return;
+    } else {
+      // Production: require the compiled server
+      serverPath = path.join(process.resourcesPath, 'server', 'dist', 'index.js');
+    }
+    
+    console.log('Loading server from:', serverPath);
+    
+    if (!fs.existsSync(serverPath)) {
+      console.error('Server file not found:', serverPath);
+      throw new Error('Server file not found');
+    }
+    
+    // Require and start the server
+    const server = require(serverPath);
+    
+    // If server exports startServer function, call it
+    if (typeof server.startServer === 'function') {
+      await server.startServer(3001);
+    }
+    
+    console.log('Server started successfully!');
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    throw error;
   }
-
-  serverProcess.stdout.on('data', (data) => {
-    console.log(`[Server] ${data.toString().trim()}`);
-  });
-
-  serverProcess.stderr.on('data', (data) => {
-    console.error(`[Server Error] ${data.toString().trim()}`);
-  });
-
-  serverProcess.on('error', (err) => {
-    console.error('Failed to start server:', err);
-  });
-
-  serverProcess.on('exit', (code) => {
-    console.log(`Server exited with code ${code}`);
-  });
-
-  // Wait for server to be ready
-  await waitForServer(3001);
-  console.log('Server is ready!');
 }
 
 function createWindow() {
@@ -146,8 +91,17 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   } else {
     // Production: load static files
-    const webPath = getWebPath();
-    mainWindow.loadFile(path.join(webPath, 'index.html'));
+    const webPath = path.join(process.resourcesPath, 'web');
+    const indexPath = path.join(webPath, 'index.html');
+    
+    console.log('Loading web from:', indexPath);
+    
+    if (fs.existsSync(indexPath)) {
+      mainWindow.loadFile(indexPath);
+    } else {
+      console.error('index.html not found at:', indexPath);
+      mainWindow.loadURL(`data:text/html,<h1>Error: Web files not found</h1><p>${indexPath}</p>`);
+    }
   }
 
   mainWindow.once('ready-to-show', () => {
@@ -157,6 +111,9 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  
+  // Open DevTools in production for debugging (remove later)
+  // mainWindow.webContents.openDevTools();
 }
 
 // App lifecycle
@@ -164,20 +121,33 @@ app.whenReady().then(async () => {
   try {
     console.log('Starting PharmaStream...');
     console.log('Development mode:', isDev);
+    console.log('Resources path:', process.resourcesPath);
     
+    setupDatabase();
     await startServer();
     createWindow();
     
   } catch (error) {
     console.error('Failed to start:', error);
-    app.quit();
+    
+    // Show error window
+    const errorWindow = new BrowserWindow({
+      width: 600,
+      height: 400,
+      title: 'PharmaStream - Error'
+    });
+    errorWindow.loadURL(`data:text/html,
+      <html>
+        <body style="font-family: Arial; padding: 20px;">
+          <h1 style="color: red;">Failed to Start</h1>
+          <pre>${error.message}\n\n${error.stack}</pre>
+        </body>
+      </html>
+    `);
   }
 });
 
 app.on('window-all-closed', () => {
-  if (serverProcess) {
-    serverProcess.kill();
-  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -186,11 +156,5 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
-  }
-});
-
-app.on('before-quit', () => {
-  if (serverProcess) {
-    serverProcess.kill();
   }
 });

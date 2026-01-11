@@ -14,7 +14,6 @@ import reportRoutes from './routes/reportRoutes';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -43,6 +42,22 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+// Export for Electron integration
+export function startServer(port: number = 3001): Promise<void> {
+  return new Promise((resolve) => {
+    app.listen(port, () => {
+      console.log(`Server running on http://localhost:${port}`);
+      resolve();
+    });
+  });
+}
+
+// Run directly if not imported (standalone mode)
+const PORT = process.env.PORT || 3001;
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
