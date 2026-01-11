@@ -5,6 +5,10 @@
   "main": "main.js",
   "author": "MD Saif Raza",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/saif-raza-001/pharmastream.git"
+  },
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
@@ -21,6 +25,7 @@
   "build": {
     "appId": "com.pharmastream.erp",
     "productName": "PharmaStream",
+    "publish": null,
     "directories": {
       "output": "dist"
     },
@@ -31,11 +36,13 @@
     "extraResources": [
       {
         "from": "../server/dist",
-        "to": "server/dist"
+        "to": "server/dist",
+        "filter": ["**/*"]
       },
       {
         "from": "../server/node_modules",
-        "to": "server/node_modules"
+        "to": "server/node_modules",
+        "filter": ["**/*"]
       },
       {
         "from": "../server/package.json",
@@ -43,11 +50,8 @@
       },
       {
         "from": "../web/out",
-        "to": "web"
-      },
-      {
-        "from": "../../data",
-        "to": "data"
+        "to": "web",
+        "filter": ["**/*"]
       }
     ],
     "win": {
@@ -56,16 +60,7 @@
           "target": "nsis",
           "arch": ["x64"]
         }
-      ],
-      "icon": "icons/icon.ico"
-    },
-    "mac": {
-      "target": ["dmg"],
-      "icon": "icons/icon.icns"
-    },
-    "linux": {
-      "target": ["AppImage"],
-      "icon": "icons/icon.png"
+      ]
     },
     "nsis": {
       "oneClick": false,
