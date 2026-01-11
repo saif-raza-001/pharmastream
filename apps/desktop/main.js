@@ -4,7 +4,6 @@ const http = require('http');
 const fs = require('fs');
 
 let mainWindow;
-let serverError = null;
 
 const isDev = !app.isPackaged;
 
@@ -20,134 +19,112 @@ const getDatabasePath = () => {
     return path.join(__dirname, '..', '..', 'data', 'pharmastream.db');
   }
   const userDataPath = app.getPath('userData');
-  const dbDir = userDataPath;
-  
-  // Ensure directory exists
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+  if (!fs.existsSync(userDataPath)) {
+    fs.mkdirSync(userDataPath, { recursive: true });
   }
-  
-  return path.join(dbDir, 'pharmastream.db');
+  return path.join(userDataPath, 'pharmastream.db');
 };
 
-function waitForServer(port, timeout = 60000) {
+function waitForServer(port, timeout = 30000) {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     
     const checkServer = () => {
-      if (serverError) {
-        reject(new Error(`Server crashed: ${serverError}`));
-        return;
-      }
-      
       const req = http.request({ host: 'localhost', port, path: '/api/health', method: 'GET', timeout: 2000 }, (res) => {
         resolve();
       });
       
       req.on('error', () => {
         if (Date.now() - startTime > timeout) {
-          reject(new Error('Server startup timeout - server did not respond within 60 seconds'));
+          reject(new Error('Server startup timeout'));
         } else {
-          setTimeout(checkServer, 1000);
+          setTimeout(checkServer, 500);
         }
       });
       
       req.on('timeout', () => {
         req.destroy();
-        if (Date.now() - startTime > timeout) {
-          reject(new Error('Server startup timeout'));
-        } else {
-          setTimeout(checkServer, 1000);
-        }
+        setTimeout(checkServer, 500);
       });
       
       req.end();
     };
     
-    // Wait a bit before first check
-    setTimeout(checkServer, 2000);
+    setTimeout(checkServer, 1000);
   });
 }
 
 async function startServer() {
   const dbPath = getDatabasePath();
+  const PORT = 3001;
   
   // Set environment variables
-  process.env.PORT = '3001';
+  process.env.PORT = String(PORT);
   process.env.DATABASE_URL = `file:${dbPath}`;
   process.env.NODE_ENV = isDev ? 'development' : 'production';
   
   console.log('=== PharmaStream Server Startup ===');
   console.log('Database path:', dbPath);
   console.log('Database exists:', fs.existsSync(dbPath));
-  console.log('NODE_ENV:', process.env.NODE_ENV);
   
-  try {
-    if (isDev) {
-      const { spawn } = require('child_process');
-      const serverPath = path.join(__dirname, '..', 'server');
-      
-      const serverProcess = spawn('npx', ['ts-node', 'src/index.ts'], {
-        cwd: serverPath,
-        env: process.env,
-        shell: true,
-        stdio: 'inherit'
-      });
-      
-      serverProcess.on('error', (err) => {
-        console.error('Server process error:', err);
-        serverError = err.message;
-      });
-      
-      serverProcess.on('exit', (code) => {
-        if (code !== 0) {
-          serverError = `Server exited with code ${code}`;
-        }
-      });
-    } else {
-      const serverPath = path.join(process.resourcesPath, 'server', 'dist', 'index.js');
-      console.log('Loading server from:', serverPath);
-      console.log('Server file exists:', fs.existsSync(serverPath));
-      
-      // Check if node_modules exist
-      const nodeModulesPath = path.join(process.resourcesPath, 'server', 'node_modules');
-      console.log('Node modules path:', nodeModulesPath);
-      console.log('Node modules exists:', fs.existsSync(nodeModulesPath));
-      
-      if (fs.existsSync(nodeModulesPath)) {
-        const prismaPath = path.join(nodeModulesPath, '@prisma', 'client');
-        const dotPrismaPath = path.join(nodeModulesPath, '.prisma', 'client');
-        console.log('@prisma/client exists:', fs.existsSync(prismaPath));
-        console.log('.prisma/client exists:', fs.existsSync(dotPrismaPath));
-        
-        if (fs.existsSync(dotPrismaPath)) {
-          const files = fs.readdirSync(dotPrismaPath);
-          console.log('.prisma/client contents:', files.slice(0, 10));
-        }
-      }
-      
-      if (!fs.existsSync(serverPath)) {
-        throw new Error(`Server file not found: ${serverPath}`);
-      }
-      
-      // Wrap require in try-catch to get better error messages
-      try {
-        require(serverPath);
-        console.log('Server module loaded successfully');
-      } catch (requireError) {
-        console.error('Failed to require server:', requireError);
-        throw new Error(`Failed to load server: ${requireError.message}`);
-      }
+  if (isDev) {
+    const { spawn } = require('child_process');
+    const serverPath = path.join(__dirname, '..', 'server');
+    
+    const serverProcess = spawn('npx', ['ts-node', 'src/index.ts'], {
+      cwd: serverPath,
+      env: process.env,
+      shell: true,
+      stdio: 'inherit'
+    });
+    
+    serverProcess.on('error', (err) => {
+      console.error('Server process error:', err);
+    });
+    
+  } else {
+    const serverDistPath = path.join(process.resourcesPath, 'server', 'dist', 'index.js');
+    const nodeModulesPath = path.join(process.resourcesPath, 'server', 'node_modules');
+    
+    console.log('Server path:', serverDistPath);
+    console.log('Server exists:', fs.existsSync(serverDistPath));
+    console.log('node_modules path:', nodeModulesPath);
+    console.log('node_modules exists:', fs.existsSync(nodeModulesPath));
+    
+    if (!fs.existsSync(serverDistPath)) {
+      throw new Error(`Server not found: ${serverDistPath}`);
     }
     
-    console.log('Waiting for server to be ready...');
-    await waitForServer(3001);
-    console.log('Server is ready!');
+    // Add server's node_modules to module resolution path
+    process.env.NODE_PATH = nodeModulesPath;
+    require('module').Module._initPaths();
     
-  } catch (error) {
-    console.error('Server startup failed:', error);
-    throw error;
+    // Load the server module
+    console.log('Loading server module...');
+    const serverModule = require(serverDistPath);
+    console.log('Server module loaded, exports:', Object.keys(serverModule));
+    
+    // Start the server - the exported startServer function or express app
+    if (typeof serverModule.startServer === 'function') {
+      console.log('Calling startServer()...');
+      await serverModule.startServer(PORT);
+      console.log('startServer() completed');
+    } else if (serverModule.default && typeof serverModule.default.listen === 'function') {
+      console.log('Starting express app directly...');
+      await new Promise((resolve) => {
+        serverModule.default.listen(PORT, () => {
+          console.log(`Express app listening on port ${PORT}`);
+          resolve();
+        });
+      });
+    } else {
+      throw new Error('Server module does not export startServer() or default express app');
+    }
   }
+  
+  console.log('Waiting for server health check...');
+  await waitForServer(PORT);
+  console.log('Server is ready!');
 }
 
 function createWindow() {
@@ -174,8 +151,6 @@ function createWindow() {
   } else {
     const webPath = getWebPath();
     const indexPath = path.join(webPath, 'index.html');
-    
-    console.log('Loading web from:', indexPath);
     
     if (!fs.existsSync(indexPath)) {
       dialog.showErrorBox('Error', `Web files not found: ${indexPath}`);
@@ -208,15 +183,9 @@ app.whenReady().then(async () => {
   } catch (error) {
     console.error('Startup failed:', error);
     
-    const details = [
-      `Error: ${error.message}`,
-      '',
-      `Resources: ${process.resourcesPath}`,
-      `UserData: ${app.getPath('userData')}`,
-      `Database: ${getDatabasePath()}`,
-    ].join('\n');
-    
-    dialog.showErrorBox('Startup Error', details);
+    dialog.showErrorBox('Startup Error', 
+      `Error: ${error.message}\n\nResources: ${process.resourcesPath}\nDatabase: ${getDatabasePath()}`
+    );
     app.quit();
   }
 });
