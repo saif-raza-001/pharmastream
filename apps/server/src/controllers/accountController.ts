@@ -38,7 +38,7 @@ export const getAccounts = async (req: Request, res: Response) => {
     });
     res.json(accounts);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch accounts' });
+    console.error('Accounts error:', error); res.status(500).json({ error: 'Failed to fetch accounts', details: String(error) });
   }
 };
 
