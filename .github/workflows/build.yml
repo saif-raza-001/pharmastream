@@ -41,6 +41,32 @@ jobs:
           cd apps/server
           pnpm run build
 
+      - name: Prepare Prisma for Electron
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "apps/desktop/prisma-build/node_modules/@prisma/client"
+          New-Item -ItemType Directory -Force -Path "apps/desktop/prisma-build/node_modules/.prisma/client"
+          
+          $prismaClientPath = "node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/@prisma/client"
+          if (Test-Path $prismaClientPath) {
+            Copy-Item -Path "$prismaClientPath/*" -Destination "apps/desktop/prisma-build/node_modules/@prisma/client" -Recurse -Force
+          }
+          
+          $dotPrismaPath = "node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma/client"
+          if (Test-Path $dotPrismaPath) {
+            Copy-Item -Path "$dotPrismaPath/*" -Destination "apps/desktop/prisma-build/node_modules/.prisma/client" -Recurse -Force
+          }
+          
+          $dbPrismaClient = "packages/database/node_modules/@prisma/client"
+          $dbDotPrisma = "packages/database/node_modules/.prisma/client"
+          
+          if (Test-Path $dbPrismaClient) {
+            Copy-Item -Path "$dbPrismaClient/*" -Destination "apps/desktop/prisma-build/node_modules/@prisma/client" -Recurse -Force
+          }
+          if (Test-Path $dbDotPrisma) {
+            Copy-Item -Path "$dbDotPrisma/*" -Destination "apps/desktop/prisma-build/node_modules/.prisma/client" -Recurse -Force
+          }
+
       - name: Build Electron App
         run: |
           cd apps/desktop
