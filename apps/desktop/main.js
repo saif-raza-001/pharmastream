@@ -4,10 +4,10 @@ const http = require('http');
 const fs = require('fs');
 
 let mainWindow;
+let serverError = null;
 
 const isDev = !app.isPackaged;
 
-// Get paths
 const getWebPath = () => {
   if (isDev) {
     return path.join(__dirname, '..', 'web', 'out');
@@ -20,48 +20,70 @@ const getDatabasePath = () => {
     return path.join(__dirname, '..', '..', 'data', 'pharmastream.db');
   }
   const userDataPath = app.getPath('userData');
-  return path.join(userDataPath, 'pharmastream.db');
+  const dbDir = userDataPath;
+  
+  // Ensure directory exists
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  
+  return path.join(dbDir, 'pharmastream.db');
 };
 
-// Wait for server to be ready
-function waitForServer(port, timeout = 30000) {
+function waitForServer(port, timeout = 60000) {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     
     const checkServer = () => {
-      const req = http.request({ host: 'localhost', port, path: '/api/health', method: 'GET' }, (res) => {
+      if (serverError) {
+        reject(new Error(`Server crashed: ${serverError}`));
+        return;
+      }
+      
+      const req = http.request({ host: 'localhost', port, path: '/api/health', method: 'GET', timeout: 2000 }, (res) => {
         resolve();
       });
       
       req.on('error', () => {
         if (Date.now() - startTime > timeout) {
+          reject(new Error('Server startup timeout - server did not respond within 60 seconds'));
+        } else {
+          setTimeout(checkServer, 1000);
+        }
+      });
+      
+      req.on('timeout', () => {
+        req.destroy();
+        if (Date.now() - startTime > timeout) {
           reject(new Error('Server startup timeout'));
         } else {
-          setTimeout(checkServer, 500);
+          setTimeout(checkServer, 1000);
         }
       });
       
       req.end();
     };
     
-    checkServer();
+    // Wait a bit before first check
+    setTimeout(checkServer, 2000);
   });
 }
 
 async function startServer() {
   const dbPath = getDatabasePath();
   
-  // Set environment variables BEFORE requiring the server
+  // Set environment variables
   process.env.PORT = '3001';
   process.env.DATABASE_URL = `file:${dbPath}`;
   process.env.NODE_ENV = isDev ? 'development' : 'production';
   
+  console.log('=== PharmaStream Server Startup ===');
   console.log('Database path:', dbPath);
-  console.log('Starting server...');
+  console.log('Database exists:', fs.existsSync(dbPath));
+  console.log('NODE_ENV:', process.env.NODE_ENV);
   
   try {
     if (isDev) {
-      // Development: spawn ts-node as separate process
       const { spawn } = require('child_process');
       const serverPath = path.join(__dirname, '..', 'server');
       
@@ -74,25 +96,56 @@ async function startServer() {
       
       serverProcess.on('error', (err) => {
         console.error('Server process error:', err);
+        serverError = err.message;
+      });
+      
+      serverProcess.on('exit', (code) => {
+        if (code !== 0) {
+          serverError = `Server exited with code ${code}`;
+        }
       });
     } else {
-      // Production: require the compiled server directly (runs in same process)
       const serverPath = path.join(process.resourcesPath, 'server', 'dist', 'index.js');
       console.log('Loading server from:', serverPath);
+      console.log('Server file exists:', fs.existsSync(serverPath));
+      
+      // Check if node_modules exist
+      const nodeModulesPath = path.join(process.resourcesPath, 'server', 'node_modules');
+      console.log('Node modules path:', nodeModulesPath);
+      console.log('Node modules exists:', fs.existsSync(nodeModulesPath));
+      
+      if (fs.existsSync(nodeModulesPath)) {
+        const prismaPath = path.join(nodeModulesPath, '@prisma', 'client');
+        const dotPrismaPath = path.join(nodeModulesPath, '.prisma', 'client');
+        console.log('@prisma/client exists:', fs.existsSync(prismaPath));
+        console.log('.prisma/client exists:', fs.existsSync(dotPrismaPath));
+        
+        if (fs.existsSync(dotPrismaPath)) {
+          const files = fs.readdirSync(dotPrismaPath);
+          console.log('.prisma/client contents:', files.slice(0, 10));
+        }
+      }
       
       if (!fs.existsSync(serverPath)) {
         throw new Error(`Server file not found: ${serverPath}`);
       }
       
-      require(serverPath);
+      // Wrap require in try-catch to get better error messages
+      try {
+        require(serverPath);
+        console.log('Server module loaded successfully');
+      } catch (requireError) {
+        console.error('Failed to require server:', requireError);
+        throw new Error(`Failed to load server: ${requireError.message}`);
+      }
     }
     
-    // Wait for server to be ready
+    console.log('Waiting for server to be ready...');
     await waitForServer(3001);
     console.log('Server is ready!');
     
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('Server startup failed:', error);
     throw error;
   }
 }
@@ -113,15 +166,12 @@ function createWindow() {
     show: false
   });
 
-  // Remove menu bar
   Menu.setApplicationMenu(null);
 
   if (isDev) {
-    // Development: load from Next.js dev server
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    // Production: load static files
     const webPath = getWebPath();
     const indexPath = path.join(webPath, 'index.html');
     
@@ -145,19 +195,28 @@ function createWindow() {
   });
 }
 
-// App lifecycle
 app.whenReady().then(async () => {
   try {
-    console.log('Starting PharmaStream...');
-    console.log('Development mode:', isDev);
+    console.log('=== Starting PharmaStream ===');
+    console.log('App packaged:', app.isPackaged);
     console.log('Resources path:', process.resourcesPath);
+    console.log('User data path:', app.getPath('userData'));
     
     await startServer();
     createWindow();
     
   } catch (error) {
-    console.error('Failed to start:', error);
-    dialog.showErrorBox('Startup Error', error.message || 'Failed to start application');
+    console.error('Startup failed:', error);
+    
+    const details = [
+      `Error: ${error.message}`,
+      '',
+      `Resources: ${process.resourcesPath}`,
+      `UserData: ${app.getPath('userData')}`,
+      `Database: ${getDatabasePath()}`,
+    ].join('\n');
+    
+    dialog.showErrorBox('Startup Error', details);
     app.quit();
   }
 });
