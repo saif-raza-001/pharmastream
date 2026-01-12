@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { formatExpiryDisplay } from "@/lib/expiryUtils";
 
 // Helper: Calculate net amount (with GST included)
 const calculateNetAmount = (qty: number, rate: number, discountPct: number, gstPct: number): number => {
@@ -309,7 +310,7 @@ export default function BillingPage() {
       productName: selectedProduct.name,
       batchId: batch.id,
       batchNo: batch.batchNo,
-      expiry: new Date(batch.expiryDate).toLocaleDateString('en-IN', { month: '2-digit', year: '2-digit' }),
+      expiry: formatExpiryDisplay(batch.expiryDate),
       quantity,
       freeQuantity: 0,
       unitRate: unitRate,
@@ -437,7 +438,7 @@ export default function BillingPage() {
       items: selectedViewInvoice.items.map((item: any) => ({
         productName: item.product.name,
         batchNo: item.batch.batchNo,
-        expiry: new Date(item.batch.expiryDate).toLocaleDateString('en-IN', { month: '2-digit', year: '2-digit' }),
+        expiry: formatExpiryDisplay(item.batch.expiryDate),
         quantity: item.quantity,
         freeQuantity: item.freeQuantity,
         unitRate: Number(item.unitRate),
@@ -909,7 +910,7 @@ export default function BillingPage() {
                 {selectedProduct?.batches?.map((b: any, i: number) => (
                   <tr key={b.id} className={`border-t ${i === 0 ? 'bg-yellow-50' : ''}`}>
                     <td className="p-2 font-medium">{b.batchNo}</td>
-                    <td className="p-2 text-center">{new Date(b.expiryDate).toLocaleDateString('en-IN')}</td>
+                    <td className="p-2 text-center">{formatExpiryDisplay(b.expiryDate)}</td>
                     <td className="p-2 text-right text-emerald-600 font-semibold">{b.currentStock}</td>
                     <td className="p-2 text-right font-bold">₹{Number(b.saleRate).toFixed(2)}</td>
                     <td className="p-2"><Button onClick={() => handleSelectBatch(b)} size="sm" className="h-6 text-xs bg-emerald-600">Select</Button></td>

@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { formatExpiryDisplay, formatExpiryOnType, parseExpiryInput } from "@/lib/expiryUtils";
 
 type TabType = 'products' | 'manufacturers' | 'categories' | 'quickentry';
 
@@ -221,7 +222,7 @@ export default function ProductsPage() {
           await productsAPI.addBatch({
             productId: product.id,
             batchNo: stockForm.batchNo,
-            expiryDate: stockForm.expiryDate,
+            expiryDate: parseExpiryInput(stockForm.expiryDate),
             currentStock: stockForm.quantity,
             purchaseRate: stockForm.purchaseRate || stockForm.saleRate * 0.8,
             mrp: stockForm.mrp,
@@ -353,7 +354,7 @@ export default function ProductsPage() {
       await productsAPI.addBatch({
         productId: selectedProduct.id,
         batchNo: batchForm.batchNo,
-        expiryDate: batchForm.expiryDate,
+        expiryDate: parseExpiryInput(batchForm.expiryDate),
         currentStock: batchForm.quantity,
         purchaseRate: batchForm.purchaseRate || batchForm.saleRate * 0.8,
         mrp: batchForm.mrp,
@@ -511,7 +512,7 @@ export default function ProductsPage() {
       await productsAPI.addBatch({
         productId,
         batchNo: quickForm.batchNo,
-        expiryDate: quickForm.expiry,
+        expiryDate: parseExpiryInput(quickForm.expiry),
         currentStock: quickForm.qty,
         purchaseRate: quickForm.pRate || quickForm.sRate * 0.75,
         mrp: quickForm.mrp,
@@ -634,7 +635,7 @@ export default function ProductsPage() {
                   {existingBatches.slice(-3).map(batch => (
                     <div key={batch.id} className="bg-white border rounded p-2 text-xs">
                       <div className="font-semibold">{batch.batchNo}</div>
-                      <div>Exp: {new Date(batch.expiryDate).toLocaleDateString('en-IN')}</div>
+                      <div>Exp: {formatExpiryDisplay(batch.expiryDate)}</div>
                       <div>Stock: {batch.currentStock}</div>
                       <div>MRP: ₹{Number(batch.mrp)}</div>
                     </div>
@@ -781,12 +782,13 @@ export default function ProductsPage() {
                   <label className="text-[10px] text-gray-500 uppercase font-bold text-red-600">Expiry Date * (NEW)</label>
                   <Input 
                     ref={quickExpiryRef}
-                    type="date"
+                    type="text"
                     value={quickForm.expiry}
-                    onChange={e => setQuickForm({...quickForm, expiry: e.target.value})}
+                    onChange={e => setQuickForm({...quickForm, expiry: formatExpiryOnType(e.target.value, quickForm.expiry)})}
                     onKeyDown={e => handleQuickKeyDown(e, quickQtyRef)}
-                    className="h-9 text-sm bg-red-50 border-2"
-                    min={new Date().toISOString().split('T')[0]}
+                    className="h-9 text-sm bg-red-50 border-2 text-center font-semibold"
+                    placeholder="MM/YY"
+                    maxLength={5}
                   />
                 </div>
                 <div className="col-span-2">
@@ -1120,7 +1122,7 @@ export default function ProductsPage() {
                 {existingBatches.map(batch => (
                   <tr key={batch.id} className="border-t hover:bg-gray-50">
                     <td className="p-2 font-semibold">{batch.batchNo}</td>
-                    <td className="p-2">{new Date(batch.expiryDate).toLocaleDateString('en-IN')}</td>
+                    <td className="p-2">{formatExpiryDisplay(batch.expiryDate)}</td>
                     <td className="p-2 text-right font-semibold">{batch.currentStock}</td>
                     <td className="p-2 text-right">₹{Number(batch.purchaseRate)}</td>
                     <td className="p-2 text-right">₹{Number(batch.mrp)}</td>
@@ -1368,7 +1370,7 @@ export default function ProductsPage() {
                       </div>
                       <div>
                         <label className="text-[10px] text-gray-500 uppercase">Expiry *</label>
-                        <Input type="date" value={stockForm.expiryDate} onChange={e => setStockForm({...stockForm, expiryDate: e.target.value})} className="h-8 text-xs" />
+                        <Input type="text" value={stockForm.expiryDate} onChange={e => setStockForm({...stockForm, expiryDate: formatExpiryOnType(e.target.value, stockForm.expiryDate)})} placeholder="MM/YY" maxLength={5} className="h-8 text-xs text-center font-semibold" />
                       </div>
                     </div>
                     <div className="grid grid-cols-4 gap-3">
@@ -1457,7 +1459,7 @@ export default function ProductsPage() {
                     return (
                       <tr key={b.id} className="border-t">
                         <td className="py-1.5 px-2 border">{b.batchNo}</td>
-                        <td className="py-1.5 px-2 border">{new Date(b.expiryDate).toLocaleDateString('en-IN')}</td>
+                        <td className="py-1.5 px-2 border">{formatExpiryDisplay(b.expiryDate)}</td>
                         <td className="py-1.5 px-2 text-right border font-semibold">{b.currentStock}</td>
                         <td className="py-1.5 px-2 text-right border">₹{Number(b.purchaseRate).toFixed(2)}</td>
                         <td className="py-1.5 px-2 text-right border">₹{Number(b.mrp).toFixed(2)}</td>
@@ -1535,7 +1537,7 @@ export default function ProductsPage() {
               </div>
               <div>
                 <label className="text-[10px] text-gray-500 uppercase">Expiry *</label>
-                <Input type="date" value={batchForm.expiryDate} onChange={e => setBatchForm({...batchForm, expiryDate: e.target.value})} className="h-8 text-xs" />
+                <Input type="text" value={batchForm.expiryDate} onChange={e => setBatchForm({...batchForm, expiryDate: formatExpiryOnType(e.target.value, batchForm.expiryDate)})} placeholder="MM/YY" maxLength={5} className="h-8 text-xs text-center font-semibold" />
               </div>
             </div>
             <div className="grid grid-cols-4 gap-3">

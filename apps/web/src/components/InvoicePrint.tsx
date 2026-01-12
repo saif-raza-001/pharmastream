@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { settingsAPI } from '@/lib/api';
+import { formatExpiryDisplay } from "@/lib/expiryUtils";
 
 interface InvoicePrintProps {
   invoice: any;
@@ -258,7 +259,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
               <td style={styles.td}>{index + 1}</td>
               <td style={styles.tdLeft}>{item.productName || item.product?.name}</td>
               <td style={styles.td}>{item.batchNo || item.batch?.batchNo}</td>
-              <td style={styles.td}>{item.expiry || (item.batch?.expiryDate ? new Date(item.batch.expiryDate).toLocaleDateString('en-IN', { month: '2-digit', year: '2-digit' }) : '')}</td>
+              <td style={styles.td}>{item.expiry || formatExpiryDisplay(item.batch?.expiryDate)}</td>
               <td style={{...styles.td, fontWeight: 'bold'}}>
                 {item.quantity}
                 {(item.freeQuantity > 0) && <span style={{fontSize: '7px'}}>(+{item.freeQuantity})</span>}

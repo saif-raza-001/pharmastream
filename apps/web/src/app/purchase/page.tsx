@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { formatExpiryDisplay, formatExpiryOnType, parseExpiryInput } from "@/lib/expiryUtils";
 
 // Dynamic import for Scanner component to avoid SSR issues
 const BillScanner = dynamic(() => import('@/components/BillScanner'), { 
@@ -259,7 +260,7 @@ export default function PurchasePage() {
       productId: selectedProduct.id,
       productName: selectedProduct.name,
       batchNo: batchNo.toUpperCase(),
-      expiryDate,
+      expiryDate: parseExpiryInput(expiryDate),
       quantity,
       freeQuantity,
       purchaseRate,
@@ -723,7 +724,7 @@ export default function PurchasePage() {
                     )}
                   </td>
                   <td className="py-1.5 px-2 text-center font-mono">{item.batchNo}</td>
-                  <td className="py-1.5 px-2 text-center">{item.expiryDate}</td>
+                  <td className="py-1.5 px-2 text-center">{formatExpiryDisplay(item.expiryDate)}</td>
                   <td className="py-1.5 px-2 text-center font-semibold">{item.quantity}</td>
                   <td className="py-1.5 px-2 text-center text-green-600">{item.freeQuantity || 0}</td>
                   <td className="py-1.5 px-2 text-right">₹{Number(item.purchaseRate).toFixed(2)}</td>
@@ -837,11 +838,12 @@ export default function PurchasePage() {
               <div>
                 <label className="text-[10px] text-gray-500 uppercase">Expiry Date *</label>
                 <Input 
-                  type="date"
+                  type="text"
                   value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.target.value)}
-                  className="h-9 text-sm"
-                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setExpiryDate(formatExpiryOnType(e.target.value, expiryDate))}
+                  className="h-9 text-sm text-center font-semibold"
+                  placeholder="MM/YY"
+                  maxLength={5}
                 />
               </div>
             </div>
