@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { reportsAPI, accountsAPI } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +9,21 @@ import { toast } from 'sonner';
 
 type ReportTab = 'sales' | 'purchases' | 'stock' | 'gst';
 
-export default function ReportsPage() {
+function ReportsContent() {
   const [activeTab, setActiveTab] = useState<ReportTab>('sales');
+  const searchParams = useSearchParams();
+
+  // Read URL parameters on mount
+  useEffect(() => {
+    const tab = searchParams.get("tab") as ReportTab;
+    const filter = searchParams.get("filter");
+    if (tab && ["sales", "purchases", "stock", "gst"].includes(tab)) {
+      setActiveTab(tab);
+    }
+    if (filter) {
+      setStockFilter(filter);
+    }
+  }, [searchParams]);
   const [loading, setLoading] = useState(false);
   
   const [fromDate, setFromDate] = useState(() => {
@@ -491,5 +505,13 @@ export default function ReportsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen"><div className="text-gray-500">Loading...</div></div>}>
+      <ReportsContent />
+    </Suspense>
   );
 }

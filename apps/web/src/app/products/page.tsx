@@ -34,6 +34,7 @@ export default function ProductsPage() {
   const [showBatchSuggestionModal, setShowBatchSuggestionModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [editMode, setEditMode] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<any>(null);
 
   // Inline add forms inside Add Product modal
   const [showInlineMfgForm, setShowInlineMfgForm] = useState(false);
@@ -367,6 +368,58 @@ export default function ProductsPage() {
       setShowBatchModal(false);
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Failed");
+    }
+  };
+
+  const handleEditBatch = (batch: any) => {
+    setEditingBatch(batch);
+    setBatchForm({
+      batchNo: batch.batchNo,
+      expiryDate: formatExpiryDisplay(batch.expiryDate),
+      quantity: batch.currentStock,
+      purchaseRate: Number(batch.purchaseRate),
+      mrp: Number(batch.mrp),
+      saleRate: Number(batch.saleRate)
+    });
+    setShowBatchModal(true);
+  };
+
+  const handleDeleteBatch = async (batchId: string) => {
+    if (!confirm("Delete this batch?")) return;
+    try {
+      await productsAPI.deleteBatch(batchId);
+      toast.success("Batch deleted");
+      const res = await productsAPI.getById(selectedProduct.id);
+      setSelectedProduct(res.data);
+      fetchProducts();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to delete");
+    }
+  };
+
+  const handleUpdateBatch = async () => {
+    if (!editingBatch?.id) return;
+    if (!batchForm.batchNo || !batchForm.expiryDate || batchForm.quantity < 0 || batchForm.mrp <= 0 || batchForm.saleRate <= 0) {
+      toast.error("Fill all fields correctly");
+      return;
+    }
+    try {
+      await productsAPI.updateBatch(editingBatch.id, {
+        batchNo: batchForm.batchNo,
+        expiryDate: parseExpiryInput(batchForm.expiryDate),
+        currentStock: batchForm.quantity,
+        purchaseRate: batchForm.purchaseRate || batchForm.saleRate * 0.8,
+        mrp: batchForm.mrp,
+        saleRate: batchForm.saleRate
+      });
+      toast.success("Batch updated");
+      const res = await productsAPI.getById(selectedProduct.id);
+      setSelectedProduct(res.data);
+      fetchProducts();
+      setShowBatchModal(false);
+      setEditingBatch(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to update");
     }
   };
 
@@ -1447,6 +1500,7 @@ export default function ProductsPage() {
                   <th className="py-2 px-2 text-right border">MRP</th>
                   <th className="py-2 px-2 text-right border">S.Rate</th>
                   <th className="py-2 px-2 text-right border text-emerald-600">Net Price</th>
+                  <th className="py-2 px-2 text-center border">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1466,6 +1520,10 @@ export default function ProductsPage() {
                         <td className="py-1.5 px-2 text-right border font-semibold">₹{Number(b.saleRate).toFixed(2)}</td>
                         <td className="py-1.5 px-2 text-right border">
                           <span className="bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded font-bold">₹{netPrice.toFixed(2)}</span>
+                        </td>
+                        <td className="py-1.5 px-2 text-center border">
+                          <button onClick={() => handleEditBatch(b)} className="text-blue-600 hover:text-blue-800 mx-1" title="Edit">✏️</button>
+                          <button onClick={() => handleDeleteBatch(b.id)} className="text-red-400 hover:text-red-600 mx-1" title="Delete">🗑️</button>
                         </td>
                       </tr>
                     );
@@ -1527,7 +1585,7 @@ export default function ProductsPage() {
       <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
         <DialogContent className="bg-white max-w-md p-0 gap-0">
           <DialogHeader className="bg-emerald-600 text-white px-4 py-3">
-            <DialogTitle className="text-sm font-semibold">Add Stock: {selectedProduct?.name}</DialogTitle>
+            <DialogTitle className="text-sm font-semibold">{editingBatch ? "Edit Batch" : "Add Stock"}: {selectedProduct?.name}</DialogTitle>
           </DialogHeader>
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -1560,7 +1618,7 @@ export default function ProductsPage() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={() => setShowBatchModal(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleSaveBatch} className="bg-emerald-600 hover:bg-emerald-700">Add Stock</Button>
+              <Button size="sm" onClick={editingBatch ? handleUpdateBatch : handleSaveBatch} className="bg-emerald-600 hover:bg-emerald-700">{editingBatch ? "Update Batch" : "Add Stock"}</Button>
             </div>
           </div>
         </DialogContent>

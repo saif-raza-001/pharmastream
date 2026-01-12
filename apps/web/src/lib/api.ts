@@ -13,6 +13,8 @@ export const productsAPI = {
   update: (id: string, data: any) => api.put(`/products/${id}`, data),
   delete: (id: string) => api.delete(`/products/${id}`),
   addBatch: (data: any) => api.post('/products/batch', data),
+  updateBatch: (id: string, data: any) => api.put(`/products/batch/${id}`, data),
+  deleteBatch: (id: string) => api.delete(`/products/batch/${id}`),
   import: (products: any[]) => api.post('/products/import', { products }),
 };
 

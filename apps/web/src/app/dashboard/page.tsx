@@ -210,7 +210,7 @@ export default function DashboardPage() {
                   <span className="text-xl">⏰</span>
                   <div>
                     <p className="text-sm font-medium text-orange-700">Expiring Soon</p>
-                    <p className="text-xs text-orange-500">Within 30 days</p>
+                    <p className="text-xs text-orange-500">Within 120 days</p>
                   </div>
                 </div>
                 <span className="text-2xl font-bold text-orange-600">{data?.alerts?.expiringSoon || 0}</span>

@@ -367,3 +367,59 @@ export const importProducts = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Import failed' });
   }
 };
+
+// Update existing batch
+export const updateBatch = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { batchNo, expiryDate, mrp, saleRate, purchaseRate, currentStock } = req.body;
+    
+    const batch = await prisma.productBatch.update({
+      where: { id },
+      data: {
+        batchNo,
+        expiryDate: expiryDate ? new Date(expiryDate) : undefined,
+        mrp,
+        saleRate,
+        purchaseRate,
+        currentStock
+      }
+    });
+    
+    res.json(batch);
+  } catch (error) {
+    console.error('Update batch error:', error);
+    res.status(500).json({ error: 'Failed to update batch' });
+  }
+};
+
+// Delete batch
+export const deleteBatch = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if batch has been used in invoices
+    const usedInInvoice = await prisma.invoiceItem.findFirst({
+      where: { batchId: id }
+    });
+    
+    if (usedInInvoice) {
+      // Soft delete - just deactivate
+      await prisma.productBatch.update({
+        where: { id },
+        data: { isActive: false }
+      });
+      return res.json({ message: 'Batch deactivated (has sales history)' });
+    }
+    
+    // Hard delete if never used
+    await prisma.productBatch.delete({
+      where: { id }
+    });
+    
+    res.json({ message: 'Batch deleted' });
+  } catch (error) {
+    console.error('Delete batch error:', error);
+    res.status(500).json({ error: 'Failed to delete batch' });
+  }
+};

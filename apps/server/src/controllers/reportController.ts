@@ -144,7 +144,7 @@ export const getStockReport = async (req: Request, res: Response) => {
 
     const today = new Date();
     const thirtyDaysLater = new Date();
-    thirtyDaysLater.setDate(today.getDate() + 30);
+    thirtyDaysLater.setDate(today.getDate() + 120);
 
     let filteredProducts = products.map(p => ({
       ...p,
@@ -286,7 +286,7 @@ export const getDashboard = async (req: Request, res: Response) => {
     const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
 
     const thirtyDaysLater = new Date();
-    thirtyDaysLater.setDate(today.getDate() + 30);
+    thirtyDaysLater.setDate(today.getDate() + 120);
 
     const todaySales = await prisma.salesInvoice.aggregate({
       where: { invoiceDate: { gte: today, lt: tomorrow } },
