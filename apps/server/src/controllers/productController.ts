@@ -264,6 +264,7 @@ export const addBatch = async (req: Request, res: Response) => {
   }
 };
 
+// ============ FIXED IMPORT WITH CATEGORY CREATION ============
 export const importProducts = async (req: Request, res: Response) => {
   try {
     const { products } = req.body;
@@ -272,35 +273,75 @@ export const importProducts = async (req: Request, res: Response) => {
     let updated = 0;
     let errors: string[] = [];
 
+    // Cache for manufacturers and categories to avoid repeated DB calls
+    let manufacturerCache: any[] = await prisma.manufacturer.findMany();
+    let categoryCache: any[] = await prisma.category.findMany();
+
     for (const p of products) {
       try {
-        const allManufacturers = await prisma.manufacturer.findMany();
-        let manufacturer = allManufacturers.find(
-          m => m.name.toLowerCase() === p.manufacturer.toLowerCase()
+        // Skip if no name or manufacturer
+        if (!p.name || !p.manufacturer) {
+          errors.push(`Skipped row: Missing name or manufacturer`);
+          continue;
+        }
+
+        // ============ MANUFACTURER: Find or Create ============
+        let manufacturer = manufacturerCache.find(
+          m => m.name.toLowerCase() === p.manufacturer.toLowerCase().trim()
         );
         
         if (!manufacturer) {
           manufacturer = await prisma.manufacturer.create({
-            data: { name: p.manufacturer, shortName: p.manufacturer.substring(0, 10) }
+            data: { 
+              name: p.manufacturer.trim(), 
+              shortName: p.manufacturer.trim().substring(0, 10) 
+            }
           });
+          manufacturerCache.push(manufacturer);
+          console.log(`Created manufacturer: ${manufacturer.name}`);
         }
 
+        // ============ CATEGORY: Find or Create ============
+        let categoryId = null;
+        const categoryName = p.category?.trim();
+        
+        if (categoryName) {
+          let category = categoryCache.find(
+            c => c.name.toLowerCase() === categoryName.toLowerCase()
+          );
+          
+          if (!category) {
+            category = await prisma.category.create({
+              data: { name: categoryName }
+            });
+            categoryCache.push(category);
+            console.log(`Created category: ${category.name}`);
+          }
+          categoryId = category.id;
+        }
+
+        // ============ PRODUCT: Find or Create ============
         let existing = null;
+        
+        // Try to find by barcode first
         if (p.barcode) {
           existing = await prisma.product.findFirst({
             where: { barcode: p.barcode }
           });
         }
+        
+        // If not found by barcode, try by name + manufacturer
         if (!existing) {
           const allProducts = await prisma.product.findMany({
             where: { manufacturerId: manufacturer.id }
           });
           existing = allProducts.find(
-            prod => prod.name.toLowerCase() === p.name.toLowerCase()
+            prod => prod.name.toLowerCase() === p.name.toLowerCase().trim()
           );
         }
 
         if (existing) {
+          // Update existing product
           await prisma.product.update({
             where: { id: existing.id },
             data: {
@@ -309,64 +350,129 @@ export const importProducts = async (req: Request, res: Response) => {
               packingInfo: p.packing || p.packingInfo || existing.packingInfo,
               hsnCode: p.hsn || p.hsnCode || existing.hsnCode,
               rackLocation: p.rack || p.rackLocation || existing.rackLocation,
-              gstRate: p.gst || p.gstRate || existing.gstRate
+              gstRate: p.gst || p.gstRate || existing.gstRate,
+              categoryId: categoryId || existing.categoryId
             }
           });
           updated++;
           
-          if (p.quantity && p.batchNo) {
-            await prisma.productBatch.create({
-              data: {
-                productId: existing.id,
-                batchNo: p.batchNo || 'OPENING',
-                expiryDate: p.expiry ? new Date(p.expiry) : new Date('2025-12-31'),
-                mrp: Number(p.mrp) || 0,
-                saleRate: Number(p.saleRate) || Number(p.rate) || 0,
-                purchaseRate: Number(p.purchaseRate) || Number(p.pRate) || 0,
-                currentStock: Number(p.quantity) || Number(p.qty) || 0
+          // Add batch if stock info provided
+          if ((p.quantity || p.qty) && p.batchNo) {
+            const batchQty = Number(p.quantity) || Number(p.qty) || 0;
+            if (batchQty > 0) {
+              // Check if batch exists
+              const existingBatch = await prisma.productBatch.findFirst({
+                where: { productId: existing.id, batchNo: p.batchNo }
+              });
+              
+              if (existingBatch) {
+                await prisma.productBatch.update({
+                  where: { id: existingBatch.id },
+                  data: { currentStock: { increment: batchQty } }
+                });
+              } else {
+                await prisma.productBatch.create({
+                  data: {
+                    productId: existing.id,
+                    batchNo: p.batchNo || 'OPENING',
+                    expiryDate: parseExpiryDate(p.expiry),
+                    mrp: Number(p.mrp) || 0,
+                    saleRate: Number(p.saleRate) || Number(p.sRate) || 0,
+                    purchaseRate: Number(p.purchaseRate) || Number(p.pRate) || 0,
+                    currentStock: batchQty
+                  }
+                });
               }
-            });
+            }
           }
         } else {
+          // Create new product
           const newProduct = await prisma.product.create({
             data: {
-              name: p.name,
+              name: p.name.trim(),
               barcode: p.barcode || null,
-              saltComposition: p.salt || p.saltComposition,
+              saltComposition: p.salt || p.saltComposition || null,
               hsnCode: p.hsn || p.hsnCode || '3004',
               manufacturerId: manufacturer.id,
-              packingInfo: p.packing || p.packingInfo,
-              rackLocation: p.rack || p.rackLocation,
-              gstRate: p.gst || p.gstRate || 12,
-              minStockAlert: p.minStock || 50
+              categoryId: categoryId,
+              packingInfo: p.packing || p.packingInfo || null,
+              rackLocation: p.rack || p.rackLocation || null,
+              gstRate: Number(p.gst) || Number(p.gstRate) || 12,
+              minStockAlert: Number(p.minStock) || 50
             }
           });
           created++;
           
-          if (p.quantity || p.qty) {
+          // Add batch if stock info provided
+          const batchQty = Number(p.quantity) || Number(p.qty) || 0;
+          if (batchQty > 0 || p.batchNo) {
             await prisma.productBatch.create({
               data: {
                 productId: newProduct.id,
                 batchNo: p.batchNo || 'OPENING',
-                expiryDate: p.expiry ? new Date(p.expiry) : new Date('2025-12-31'),
+                expiryDate: parseExpiryDate(p.expiry),
                 mrp: Number(p.mrp) || 0,
-                saleRate: Number(p.saleRate) || Number(p.rate) || 0,
+                saleRate: Number(p.saleRate) || Number(p.sRate) || 0,
                 purchaseRate: Number(p.purchaseRate) || Number(p.pRate) || 0,
-                currentStock: Number(p.quantity) || Number(p.qty) || 0
+                currentStock: batchQty
               }
             });
           }
         }
-      } catch (err) {
-        errors.push(`Error with ${p.name}: ${err}`);
+      } catch (err: any) {
+        errors.push(`Error with "${p.name}": ${err.message}`);
+        console.error(`Import error for ${p.name}:`, err);
       }
     }
 
-    res.json({ created, updated, errors, total: products.length });
+    res.json({ 
+      created, 
+      updated, 
+      errors: errors.slice(0, 10), // Return first 10 errors only
+      total: products.length,
+      success: true
+    });
   } catch (error) {
+    console.error('Import failed:', error);
     res.status(500).json({ error: 'Import failed' });
   }
 };
+
+// Helper to parse various expiry date formats
+function parseExpiryDate(expiry: string): Date {
+  if (!expiry) {
+    // Default: 2 years from now
+    const defaultDate = new Date();
+    defaultDate.setFullYear(defaultDate.getFullYear() + 2);
+    return defaultDate;
+  }
+  
+  const cleaned = expiry.trim();
+  
+  // Format: MM/YY or MM-YY
+  if (/^\d{2}[\/\-]\d{2}$/.test(cleaned)) {
+    const [month, year] = cleaned.split(/[\/\-]/);
+    const fullYear = 2000 + parseInt(year);
+    return new Date(fullYear, parseInt(month), 0); // Last day of month
+  }
+  
+  // Format: MM/YYYY or MM-YYYY
+  if (/^\d{2}[\/\-]\d{4}$/.test(cleaned)) {
+    const [month, year] = cleaned.split(/[\/\-]/);
+    return new Date(parseInt(year), parseInt(month), 0);
+  }
+  
+  // Format: YYYY-MM-DD or DD-MM-YYYY
+  const parsed = new Date(cleaned);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+  
+  // Default fallback
+  const fallback = new Date();
+  fallback.setFullYear(fallback.getFullYear() + 2);
+  return fallback;
+}
 
 // Update existing batch
 export const updateBatch = async (req: Request, res: Response) => {

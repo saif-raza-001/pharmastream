@@ -1,9 +1,11 @@
 import { Router } from 'express';
-import { getManufacturers, createManufacturer } from '../controllers/manufacturerController';
+import { getManufacturers, createManufacturer, updateManufacturer, deleteManufacturer } from '../controllers/manufacturerController';
 
 const router = Router();
 
 router.get('/', getManufacturers);
 router.post('/', createManufacturer);
+router.put('/:id', updateManufacturer);
+router.delete('/:id', deleteManufacturer);
 
 export default router;
