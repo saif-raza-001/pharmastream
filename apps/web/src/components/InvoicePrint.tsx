@@ -37,10 +37,11 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
   const netPayable = grandTotal + previousDue - advanceUsed;
   const balanceDue = netPayable - paidAmount;
 
+  // ALL BLACK & WHITE STYLES - NO COLORS
   const styles = {
     container: {
       backgroundColor: '#ffffff',
-      padding: '30px',
+      padding: '25px',
       maxWidth: '800px',
       margin: '0 auto',
       fontFamily: 'Arial, sans-serif',
@@ -50,36 +51,40 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
     header: {
       textAlign: 'center' as const,
       borderBottom: '2px solid #000',
-      paddingBottom: '15px',
-      marginBottom: '15px',
+      paddingBottom: '12px',
+      marginBottom: '12px',
     },
     companyName: {
-      fontSize: '20px',
+      fontSize: '22px',
       fontWeight: 'bold',
       textTransform: 'uppercase' as const,
       margin: '0',
+      color: '#000',
     },
     headerText: {
-      fontSize: '11px',
+      fontSize: '12px',
       margin: '3px 0',
+      color: '#000',
     },
     invoiceTitle: {
       textAlign: 'center' as const,
-      marginBottom: '15px',
+      marginBottom: '12px',
     },
     titleText: {
-      fontSize: '16px',
+      fontSize: '18px',
       fontWeight: 'bold',
       margin: '0',
+      color: '#000',
     },
     subtitleText: {
-      fontSize: '11px',
+      fontSize: '12px',
       margin: '5px 0 0 0',
+      color: '#000',
     },
     infoRow: {
       display: 'flex',
       justifyContent: 'space-between',
-      marginBottom: '20px',
+      marginBottom: '15px',
     },
     billTo: {
       width: '50%',
@@ -90,12 +95,14 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
     },
     labelBold: {
       fontWeight: 'bold',
-      fontSize: '11px',
+      fontSize: '12px',
       marginBottom: '5px',
+      color: '#000',
     },
     infoText: {
-      fontSize: '11px',
+      fontSize: '12px',
       margin: '2px 0',
+      color: '#000',
     },
     table: {
       width: '100%',
@@ -103,46 +110,52 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
       marginBottom: '15px',
     },
     tableHeader: {
-      backgroundColor: '#f0f0f0',
+      backgroundColor: '#f5f5f5',
     },
     th: {
       border: '1px solid #000',
-      padding: '6px 4px',
-      fontSize: '9px',
+      padding: '8px 5px',
+      fontSize: '11px',
       fontWeight: 'bold',
       textAlign: 'center' as const,
+      color: '#000',
     },
     thLeft: {
       border: '1px solid #000',
-      padding: '6px 4px',
-      fontSize: '9px',
+      padding: '8px 5px',
+      fontSize: '11px',
       fontWeight: 'bold',
       textAlign: 'left' as const,
+      color: '#000',
     },
     thRight: {
       border: '1px solid #000',
-      padding: '6px 4px',
-      fontSize: '9px',
+      padding: '8px 5px',
+      fontSize: '11px',
       fontWeight: 'bold',
       textAlign: 'right' as const,
+      color: '#000',
     },
     td: {
       border: '1px solid #000',
-      padding: '5px 4px',
-      fontSize: '9px',
+      padding: '6px 5px',
+      fontSize: '11px',
       textAlign: 'center' as const,
+      color: '#000',
     },
     tdLeft: {
       border: '1px solid #000',
-      padding: '5px 4px',
-      fontSize: '9px',
+      padding: '6px 5px',
+      fontSize: '11px',
       textAlign: 'left' as const,
+      color: '#000',
     },
     tdRight: {
       border: '1px solid #000',
-      padding: '5px 4px',
-      fontSize: '9px',
+      padding: '6px 5px',
+      fontSize: '11px',
       textAlign: 'right' as const,
+      color: '#000',
     },
     summaryRow: {
       display: 'flex',
@@ -152,7 +165,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
     amountWords: {
       width: '50%',
       border: '1px solid #000',
-      padding: '8px',
+      padding: '10px',
     },
     totalsBox: {
       width: '45%',
@@ -160,43 +173,46 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
     totalRow: {
       display: 'flex',
       justifyContent: 'space-between',
-      padding: '3px 0',
-      fontSize: '10px',
+      padding: '4px 0',
+      fontSize: '12px',
+      color: '#000',
     },
     grandTotalRow: {
       display: 'flex',
       justifyContent: 'space-between',
-      padding: '6px 0',
-      fontSize: '12px',
+      padding: '8px 0',
+      fontSize: '14px',
       fontWeight: 'bold',
       borderTop: '2px solid #000',
       marginTop: '5px',
+      color: '#000',
     },
     footer: {
       marginTop: '20px',
       paddingTop: '10px',
-      borderTop: '1px solid #ccc',
+      borderTop: '1px solid #000',
       display: 'flex',
       justifyContent: 'space-between',
     },
     terms: {
       width: '50%',
-      fontSize: '8px',
-      color: '#666',
+      fontSize: '10px',
+      color: '#000',
     },
     signature: {
       width: '40%',
       textAlign: 'right' as const,
     },
     signatureLine: {
-      marginTop: '30px',
+      marginTop: '35px',
       borderTop: '1px solid #000',
       paddingTop: '5px',
-      fontSize: '9px',
+      fontSize: '11px',
+      color: '#000',
     },
     gstNote: {
-      fontSize: '8px',
-      color: '#666',
+      fontSize: '10px',
+      color: '#000',
       fontStyle: 'italic' as const,
       marginTop: '5px',
     },
@@ -241,16 +257,16 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
       <table style={styles.table}>
         <thead>
           <tr style={styles.tableHeader}>
-            <th style={{...styles.th, width: '25px'}}>#</th>
-            <th style={{...styles.thLeft, width: '180px'}}>Product</th>
-            <th style={{...styles.th, width: '60px'}}>Batch</th>
-            <th style={{...styles.th, width: '45px'}}>Exp</th>
-            <th style={{...styles.th, width: '35px'}}>Qty</th>
-            <th style={{...styles.thRight, width: '50px'}}>MRP</th>
-            <th style={{...styles.thRight, width: '50px'}}>Rate</th>
-            <th style={{...styles.th, width: '35px'}}>D%</th>
-            <th style={{...styles.th, width: '35px'}}>GST%</th>
-            <th style={{...styles.thRight, width: '70px'}}>Net Amt</th>
+            <th style={{...styles.th, width: '30px'}}>#</th>
+            <th style={{...styles.thLeft, width: '200px'}}>Product</th>
+            <th style={{...styles.th, width: '70px'}}>Batch</th>
+            <th style={{...styles.th, width: '50px'}}>Exp</th>
+            <th style={{...styles.th, width: '40px'}}>Qty</th>
+            <th style={{...styles.thRight, width: '55px'}}>MRP</th>
+            <th style={{...styles.thRight, width: '55px'}}>Rate</th>
+            <th style={{...styles.th, width: '40px'}}>Disc%</th>
+            <th style={{...styles.th, width: '40px'}}>GST%</th>
+            <th style={{...styles.thRight, width: '75px'}}>Net Amt</th>
           </tr>
         </thead>
         <tbody>
@@ -262,28 +278,28 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
               <td style={styles.td}>{item.expiry || formatExpiryDisplay(item.batch?.expiryDate)}</td>
               <td style={{...styles.td, fontWeight: 'bold'}}>
                 {item.quantity}
-                {(item.freeQuantity > 0) && <span style={{fontSize: '7px'}}>(+{item.freeQuantity})</span>}
+                {(item.freeQuantity > 0) && <span style={{fontSize: '9px'}}>(+{item.freeQuantity})</span>}
               </td>
               <td style={styles.tdRight}>₹{Number(item.mrp || item.batch?.mrp || item.unitRate).toFixed(2)}</td>
               <td style={styles.tdRight}>₹{Number(item.unitRate).toFixed(2)}</td>
               <td style={styles.td}>{Number(item.discountPct)}%</td>
               <td style={styles.td}>{Number(item.gstPct)}%</td>
-              <td style={{...styles.tdRight, fontWeight: 'bold', backgroundColor: '#f0fff0'}}>₹{Number(item.amount || item.totalAmount).toFixed(2)}</td>
+              <td style={{...styles.tdRight, fontWeight: 'bold'}}>₹{Number(item.amount || item.totalAmount).toFixed(2)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* Summary & Payment - SIMPLIFIED */}
+      {/* Summary & Payment */}
       <div style={styles.summaryRow}>
         {/* Amount in Words */}
         <div style={styles.amountWords}>
-          <p style={{fontWeight: 'bold', marginBottom: '5px', fontSize: '9px'}}>Amount in Words:</p>
-          <p style={{fontSize: '10px'}}>{numberToWords(Math.round(netPayable > 0 ? netPayable : grandTotal))} Rupees Only</p>
+          <p style={{fontWeight: 'bold', marginBottom: '5px', fontSize: '11px', color: '#000'}}>Amount in Words:</p>
+          <p style={{fontSize: '12px', color: '#000'}}>{numberToWords(Math.round(netPayable > 0 ? netPayable : grandTotal))} Rupees Only</p>
           <p style={styles.gstNote}>* All amounts are inclusive of GST</p>
         </div>
 
-        {/* Totals - SIMPLIFIED */}
+        {/* Totals */}
         <div style={styles.totalsBox}>
           {totalDiscount > 0 && (
             <>
@@ -291,21 +307,21 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
                 <span>Subtotal:</span>
                 <span>₹{subtotal.toFixed(2)}</span>
               </div>
-              <div style={{...styles.totalRow, color: '#dc3545'}}>
+              <div style={styles.totalRow}>
                 <span>Discount:</span>
                 <span>-₹{totalDiscount.toFixed(2)}</span>
               </div>
             </>
           )}
           
-          <div style={{...styles.totalRow, fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: '5px', fontSize: '12px'}}>
+          <div style={{...styles.totalRow, fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: '5px', fontSize: '13px'}}>
             <span>Bill Amount:</span>
             <span>₹{grandTotal.toFixed(2)}</span>
           </div>
           
           {/* Show Previous Due if added */}
           {previousDue > 0 && (
-            <div style={{...styles.totalRow, color: '#dc3545'}}>
+            <div style={styles.totalRow}>
               <span>+ Previous Due:</span>
               <span>₹{previousDue.toFixed(2)}</span>
             </div>
@@ -313,7 +329,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           
           {/* Show Advance Used if any */}
           {advanceUsed > 0 && (
-            <div style={{...styles.totalRow, color: '#28a745'}}>
+            <div style={styles.totalRow}>
               <span>- Advance Adjusted:</span>
               <span>₹{advanceUsed.toFixed(2)}</span>
             </div>
@@ -321,7 +337,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           
           {/* Net Payable (if different from bill amount) */}
           {(previousDue > 0 || advanceUsed > 0) && (
-            <div style={{...styles.totalRow, fontWeight: 'bold', backgroundColor: '#e9ecef', padding: '4px'}}>
+            <div style={{...styles.totalRow, fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: '4px'}}>
               <span>Net Payable:</span>
               <span>₹{netPayable.toFixed(2)}</span>
             </div>
@@ -329,7 +345,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           
           {/* Amount Received */}
           {paidAmount > 0 && (
-            <div style={{...styles.totalRow, color: '#28a745'}}>
+            <div style={styles.totalRow}>
               <span>Received ({paymentMode}):</span>
               <span>₹{paidAmount.toFixed(2)}</span>
             </div>
@@ -338,18 +354,18 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           {/* Balance Due or Paid Status */}
           {dueAmount > 0 || balanceDue > 0 ? (
             <div style={styles.grandTotalRow}>
-              <span style={{color: '#dc3545'}}>BALANCE DUE:</span>
-              <span style={{color: '#dc3545'}}>₹{(dueAmount || balanceDue).toFixed(2)}</span>
+              <span>BALANCE DUE:</span>
+              <span>₹{(dueAmount || balanceDue).toFixed(2)}</span>
             </div>
           ) : balanceDue < 0 ? (
             <div style={styles.grandTotalRow}>
-              <span style={{color: '#28a745'}}>NEW ADVANCE:</span>
-              <span style={{color: '#28a745'}}>₹{Math.abs(balanceDue).toFixed(2)}</span>
+              <span>NEW ADVANCE:</span>
+              <span>₹{Math.abs(balanceDue).toFixed(2)}</span>
             </div>
           ) : (
             <div style={styles.grandTotalRow}>
-              <span style={{color: '#28a745'}}>PAID</span>
-              <span style={{color: '#28a745'}}>✓</span>
+              <span>PAID IN FULL</span>
+              <span>✓</span>
             </div>
           )}
         </div>
@@ -364,7 +380,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           <p>3. E. & O.E.</p>
         </div>
         <div style={styles.signature}>
-          <p style={{fontSize: '10px', fontWeight: 'bold'}}>For {settings.companyName}</p>
+          <p style={{fontSize: '12px', fontWeight: 'bold'}}>For {settings.companyName}</p>
           <div style={styles.signatureLine}>
             Authorized Signature
           </div>

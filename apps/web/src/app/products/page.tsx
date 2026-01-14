@@ -775,12 +775,13 @@ export default function ProductsPage() {
                   <th className="w-12 py-2 px-2 text-center">GST</th>
                   <th className="w-16 py-2 px-2 text-right">Stock</th>
                   <th className="w-16 py-2 px-2 text-right">Rate</th>
+                  <th className="w-20 py-2 px-2 text-right text-emerald-600">Net Price</th>
                   <th className="w-20 py-2 px-2 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {loadingProducts ? <tr><td colSpan={8} className="text-center py-10 text-gray-400">Loading...</td></tr> :
-                 products.length === 0 ? <tr><td colSpan={8} className="text-center py-10 text-gray-400">No products</td></tr> :
+                {loadingProducts ? <tr><td colSpan={9} className="text-center py-10 text-gray-400">Loading...</td></tr> :
+                 products.length === 0 ? <tr><td colSpan={9} className="text-center py-10 text-gray-400">No products</td></tr> :
                  products.map((p, i) => (
                   <tr key={p.id} className="border-b hover:bg-gray-50">
                     <td className="py-1.5 px-2 text-gray-500">{i + 1}</td>
@@ -790,6 +791,7 @@ export default function ProductsPage() {
                     <td className="py-1.5 px-2 text-center"><span className="bg-blue-50 text-blue-700 px-1 py-0.5 rounded text-[10px]">{p.gstRate || 12}%</span></td>
                     <td className={`py-1.5 px-2 text-right font-semibold ${p.totalStock === 0 ? 'text-red-600' : p.totalStock < 50 ? 'text-orange-600' : 'text-green-600'}`}>{p.totalStock}</td>
                     <td className="py-1.5 px-2 text-right">₹{(p.avgRate || 0).toFixed(2)}</td>
+                    <td className="py-1.5 px-2 text-right"><span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">₹{calculateNetPrice(p.avgRate || 0, p.gstRate || 12).toFixed(2)}</span></td>
                     <td className="py-1.5 px-2 text-center">
                       <button onClick={() => handleViewProduct(p)} className="text-blue-600 hover:text-blue-800 mx-1">👁️</button>
                       <button onClick={() => handleEditProduct(p)} className="text-gray-600 hover:text-gray-800 mx-1">✏️</button>
