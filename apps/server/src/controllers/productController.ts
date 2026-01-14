@@ -322,29 +322,57 @@ export const importProducts = async (req: Request, res: Response) => {
 
         // ============ PRODUCT: Find or Create ============
         let existing = null;
+        let wasInactive = false;
         
-        // Try to find by barcode first
+        // Try to find ACTIVE product by barcode first
         if (p.barcode) {
           existing = await prisma.product.findFirst({
-            where: { barcode: p.barcode }
+            where: { barcode: p.barcode, isActive: true }
           });
         }
         
-        // If not found by barcode, try by name + manufacturer
+        // If not found by barcode, try by name + manufacturer (ACTIVE only)
         if (!existing) {
           const allProducts = await prisma.product.findMany({
-            where: { manufacturerId: manufacturer.id }
+            where: { manufacturerId: manufacturer.id, isActive: true }
           });
           existing = allProducts.find(
             prod => prod.name.toLowerCase() === p.name.toLowerCase().trim()
           );
         }
 
+        // If still not found, check if there's an INACTIVE product we can reactivate
+        if (!existing) {
+          let inactiveProduct = null;
+          
+          if (p.barcode) {
+            inactiveProduct = await prisma.product.findFirst({
+              where: { barcode: p.barcode, isActive: false }
+            });
+          }
+          
+          if (!inactiveProduct) {
+            const inactiveProducts = await prisma.product.findMany({
+              where: { manufacturerId: manufacturer.id, isActive: false }
+            });
+            inactiveProduct = inactiveProducts.find(
+              prod => prod.name.toLowerCase() === p.name.toLowerCase().trim()
+            );
+          }
+          
+          if (inactiveProduct) {
+            // Reactivate the product
+            existing = inactiveProduct;
+            wasInactive = true;
+          }
+        }
+
         if (existing) {
-          // Update existing product
+          // Update existing product (or reactivate if was inactive)
           await prisma.product.update({
             where: { id: existing.id },
             data: {
+              isActive: true,  // Reactivate if was deleted
               barcode: p.barcode || existing.barcode,
               saltComposition: p.salt || p.saltComposition || existing.saltComposition,
               packingInfo: p.packing || p.packingInfo || existing.packingInfo,
@@ -354,7 +382,13 @@ export const importProducts = async (req: Request, res: Response) => {
               categoryId: categoryId || existing.categoryId
             }
           });
-          updated++;
+          
+          if (wasInactive) {
+            created++;  // Count as created since it was reactivated
+            console.log(`Reactivated product: ${existing.name}`);
+          } else {
+            updated++;
+          }
           
           // Add batch if stock info provided
           if ((p.quantity || p.qty) && p.batchNo) {
@@ -439,39 +473,111 @@ export const importProducts = async (req: Request, res: Response) => {
 };
 
 // Helper to parse various expiry date formats
-function parseExpiryDate(expiry: string): Date {
-  if (!expiry) {
-    // Default: 2 years from now
-    const defaultDate = new Date();
-    defaultDate.setFullYear(defaultDate.getFullYear() + 2);
-    return defaultDate;
+function parseExpiryDate(expiry: string | number): Date {
+  // Default: 2 years from now
+  const getDefault = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 2);
+    return d;
+  };
+
+  if (!expiry && expiry !== 0) return getDefault();
+  
+  // Convert to string and clean
+  let cleaned = String(expiry).trim();
+  
+  // Remove any quotes
+  cleaned = cleaned.replace(/['"]/g, '');
+  
+  if (!cleaned) return getDefault();
+
+  // Excel serial date number (e.g., 45678)
+  if (/^\d{5}$/.test(cleaned)) {
+    const excelDate = parseInt(cleaned);
+    // Excel dates start from 1900-01-01
+    const date = new Date((excelDate - 25569) * 86400 * 1000);
+    if (!isNaN(date.getTime())) return date;
   }
-  
-  const cleaned = expiry.trim();
-  
-  // Format: MM/YY or MM-YY
-  if (/^\d{2}[\/\-]\d{2}$/.test(cleaned)) {
-    const [month, year] = cleaned.split(/[\/\-]/);
+
+  // Format: MMYY (4 digits without separator) e.g., 1227 = Dec 2027
+  if (/^\d{4}$/.test(cleaned)) {
+    const month = parseInt(cleaned.substring(0, 2));
+    const year = parseInt(cleaned.substring(2, 4));
+    if (month >= 1 && month <= 12) {
+      const fullYear = 2000 + year;
+      return new Date(fullYear, month, 0); // Last day of month
+    }
+  }
+
+  // Format: MYY (3 digits) e.g., 625 = Jun 2025
+  if (/^\d{3}$/.test(cleaned)) {
+    const month = parseInt(cleaned.substring(0, 1));
+    const year = parseInt(cleaned.substring(1, 3));
+    if (month >= 1 && month <= 9) {
+      const fullYear = 2000 + year;
+      return new Date(fullYear, month, 0);
+    }
+  }
+
+  // Format: MMYYYY (6 digits) e.g., 122027 = Dec 2027
+  if (/^\d{6}$/.test(cleaned)) {
+    const month = parseInt(cleaned.substring(0, 2));
+    const year = parseInt(cleaned.substring(2, 6));
+    if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) {
+      return new Date(year, month, 0);
+    }
+  }
+
+  // Format: MM/YY or MM-YY or MM.YY
+  if (/^\d{1,2}[\/\-\.]\d{2}$/.test(cleaned)) {
+    const [month, year] = cleaned.split(/[\/\-\.]/);
     const fullYear = 2000 + parseInt(year);
-    return new Date(fullYear, parseInt(month), 0); // Last day of month
+    return new Date(fullYear, parseInt(month), 0);
   }
   
-  // Format: MM/YYYY or MM-YYYY
-  if (/^\d{2}[\/\-]\d{4}$/.test(cleaned)) {
-    const [month, year] = cleaned.split(/[\/\-]/);
+  // Format: MM/YYYY or MM-YYYY or MM.YYYY
+  if (/^\d{1,2}[\/\-\.]\d{4}$/.test(cleaned)) {
+    const [month, year] = cleaned.split(/[\/\-\.]/);
     return new Date(parseInt(year), parseInt(month), 0);
   }
-  
-  // Format: YYYY-MM-DD or DD-MM-YYYY
-  const parsed = new Date(cleaned);
-  if (!isNaN(parsed.getTime())) {
-    return parsed;
+
+  // Format: YYYY-MM-DD (ISO format)
+  if (/^\d{4}-\d{2}-\d{2}/.test(cleaned)) {
+    const parsed = new Date(cleaned);
+    if (!isNaN(parsed.getTime())) return parsed;
   }
+
+  // Format: DD-MM-YYYY or DD/MM/YYYY
+  if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(cleaned)) {
+    const parts = cleaned.split(/[\/\-]/);
+    const date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // Month names: Dec-27, Dec 27, December 2027
+  const monthNames: { [key: string]: number } = {
+    'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+    'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6,
+    'jul': 7, 'july': 7, 'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9,
+    'oct': 10, 'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+  };
+  
+  const monthMatch = cleaned.toLowerCase().match(/^([a-z]+)[\/\-\s]*(\d{2,4})$/);
+  if (monthMatch) {
+    const monthNum = monthNames[monthMatch[1]];
+    let year = parseInt(monthMatch[2]);
+    if (monthNum && year) {
+      if (year < 100) year = 2000 + year;
+      return new Date(year, monthNum, 0);
+    }
+  }
+
+  // Try native Date parsing as last resort
+  const parsed = new Date(cleaned);
+  if (!isNaN(parsed.getTime())) return parsed;
   
   // Default fallback
-  const fallback = new Date();
-  fallback.setFullYear(fallback.getFullYear() + 2);
-  return fallback;
+  return getDefault();
 }
 
 // Update existing batch
