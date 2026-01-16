@@ -26,6 +26,27 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
   }, 0);
   const grandTotal = Number(invoice.grandTotal) || items.reduce((sum, item) => sum + Number(item.amount || item.totalAmount || 0), 0);
 
+  // Calculate GST breakdown (CGST + SGST)
+  const totalTaxableAmount = items.reduce((sum, item) => {
+    const qty = Number(item.quantity);
+    const rate = Number(item.unitRate);
+    const discPct = Number(item.discountPct) || 0;
+    return sum + (qty * rate * (1 - discPct / 100));
+  }, 0);
+
+  const totalGstAmount = items.reduce((sum, item) => {
+    const qty = Number(item.quantity);
+    const rate = Number(item.unitRate);
+    const discPct = Number(item.discountPct) || 0;
+    const gstPct = Number(item.gstPct) || 0;
+    const taxable = qty * rate * (1 - discPct / 100);
+    return sum + (taxable * gstPct / 100);
+  }, 0);
+
+  // CGST and SGST are each half of total GST (for intra-state)
+  const cgstAmount = totalGstAmount / 2;
+  const sgstAmount = totalGstAmount / 2;
+
   // Payment details
   const payment = invoice.payment || {};
   const advanceUsed = Number(payment.advanceUsed || invoice.advanceUsed || 0);
@@ -280,11 +301,11 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
                 {item.quantity}
                 {(item.freeQuantity > 0) && <span style={{fontSize: '9px'}}>(+{item.freeQuantity})</span>}
               </td>
-              <td style={styles.tdRight}>₹{Number(item.mrp || item.batch?.mrp || item.unitRate).toFixed(2)}</td>
-              <td style={styles.tdRight}>₹{Number(item.unitRate).toFixed(2)}</td>
+              <td style={styles.tdRight}>{Number(item.mrp || item.batch?.mrp || item.unitRate).toFixed(2)}</td>
+              <td style={styles.tdRight}>{Number(item.unitRate).toFixed(2)}</td>
               <td style={styles.td}>{Number(item.discountPct)}%</td>
               <td style={styles.td}>{Number(item.gstPct)}%</td>
-              <td style={{...styles.tdRight, fontWeight: 'bold'}}>₹{Number(item.amount || item.totalAmount).toFixed(2)}</td>
+              <td style={{...styles.tdRight, fontWeight: 'bold'}}>{Number(item.amount || item.totalAmount).toFixed(2)}</td>
             </tr>
           ))}
         </tbody>
@@ -299,31 +320,45 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           <p style={styles.gstNote}>* All amounts are inclusive of GST</p>
         </div>
 
-        {/* Totals */}
+        {/* Totals with CGST/SGST breakdown */}
         <div style={styles.totalsBox}>
+          {/* Taxable Amount */}
+          <div style={styles.totalRow}>
+            <span>Taxable Amount:</span>
+            <span>{totalTaxableAmount.toFixed(2)}</span>
+          </div>
+          
+          {/* CGST */}
+          <div style={styles.totalRow}>
+            <span>CGST:</span>
+            <span>{cgstAmount.toFixed(2)}</span>
+          </div>
+          
+          {/* SGST */}
+          <div style={styles.totalRow}>
+            <span>SGST:</span>
+            <span>{sgstAmount.toFixed(2)}</span>
+          </div>
+
+          {/* Discount if any */}
           {totalDiscount > 0 && (
-            <>
-              <div style={styles.totalRow}>
-                <span>Subtotal:</span>
-                <span>₹{subtotal.toFixed(2)}</span>
-              </div>
-              <div style={styles.totalRow}>
-                <span>Discount:</span>
-                <span>-₹{totalDiscount.toFixed(2)}</span>
-              </div>
-            </>
+            <div style={styles.totalRow}>
+              <span>Discount:</span>
+              <span>-{totalDiscount.toFixed(2)}</span>
+            </div>
           )}
           
+          {/* Bill Amount */}
           <div style={{...styles.totalRow, fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: '5px', fontSize: '13px'}}>
             <span>Bill Amount:</span>
-            <span>₹{grandTotal.toFixed(2)}</span>
+            <span>{grandTotal.toFixed(2)}</span>
           </div>
           
           {/* Show Previous Due if added */}
           {previousDue > 0 && (
             <div style={styles.totalRow}>
               <span>+ Previous Due:</span>
-              <span>₹{previousDue.toFixed(2)}</span>
+              <span>{previousDue.toFixed(2)}</span>
             </div>
           )}
           
@@ -331,7 +366,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           {advanceUsed > 0 && (
             <div style={styles.totalRow}>
               <span>- Advance Adjusted:</span>
-              <span>₹{advanceUsed.toFixed(2)}</span>
+              <span>{advanceUsed.toFixed(2)}</span>
             </div>
           )}
           
@@ -339,7 +374,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           {(previousDue > 0 || advanceUsed > 0) && (
             <div style={{...styles.totalRow, fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: '4px'}}>
               <span>Net Payable:</span>
-              <span>₹{netPayable.toFixed(2)}</span>
+              <span>{netPayable.toFixed(2)}</span>
             </div>
           )}
           
@@ -347,7 +382,7 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           {paidAmount > 0 && (
             <div style={styles.totalRow}>
               <span>Received ({paymentMode}):</span>
-              <span>₹{paidAmount.toFixed(2)}</span>
+              <span>{paidAmount.toFixed(2)}</span>
             </div>
           )}
           
@@ -355,12 +390,12 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
           {dueAmount > 0 || balanceDue > 0 ? (
             <div style={styles.grandTotalRow}>
               <span>BALANCE DUE:</span>
-              <span>₹{(dueAmount || balanceDue).toFixed(2)}</span>
+              <span>{(dueAmount || balanceDue).toFixed(2)}</span>
             </div>
           ) : balanceDue < 0 ? (
             <div style={styles.grandTotalRow}>
               <span>NEW ADVANCE:</span>
-              <span>₹{Math.abs(balanceDue).toFixed(2)}</span>
+              <span>{Math.abs(balanceDue).toFixed(2)}</span>
             </div>
           ) : (
             <div style={styles.grandTotalRow}>
