@@ -62,6 +62,7 @@ export default function BillingPage() {
     city: '',
     address: '',
     gstin: '',
+    dlNumber: '',
     creditLimit: 0
   });
 
@@ -265,11 +266,12 @@ export default function BillingPage() {
         city: newCustomerForm.city || 'Local',
         address: newCustomerForm.address || null,
         gstin: newCustomerForm.gstin || null,
+        dlNumber: newCustomerForm.dlNumber || null,
         creditLimit: newCustomerForm.creditLimit || 0,
         openingBalance: 0
       });
       handleSelectCustomer(res.data);
-      setNewCustomerForm({ name: '', mobile: '', city: '', address: '', gstin: '', creditLimit: 0 });
+      setNewCustomerForm({ name: '', mobile: '', city: '', address: '', gstin: '', dlNumber: '', creditLimit: 0 });
       setShowAddCustomerModal(false);
       toast.success(`Customer "${res.data.name}" added`);
     } catch (err: any) {
@@ -458,7 +460,7 @@ export default function BillingPage() {
     const printContent = printRef.current;
     if (!printContent) return;
 
-    const printWindow = window.open('', '_blank', 'width=900,height=800');
+    const printWindow = window.open('', '_blank', 'width=1200,height=800');
     if (!printWindow) return;
 
     printWindow.document.write(`
@@ -467,9 +469,21 @@ export default function BillingPage() {
       <head>
         <title>Invoice #${savedInvoice.invoiceNo}</title>
         <style>
-          @page { size: auto; margin: 5mm; }
-          body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
-          @media print { .no-print { display: none; } }
+          @page { 
+            size: A4 landscape; 
+            margin: 5mm; 
+          }
+          body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          @media print { 
+            .no-print { display: none; }
+            body { margin: 0; padding: 0; }
+          }
         </style>
       </head>
       <body>
@@ -840,30 +854,44 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* Add Customer Modal */}
+      {/* Add Customer Modal - UPDATED with DL Number, GSTIN, Address */}
       <Dialog open={showAddCustomerModal} onOpenChange={setShowAddCustomerModal}>
-        <DialogContent className="bg-white max-w-md p-0 gap-0">
+        <DialogContent className="bg-white max-w-lg p-0 gap-0">
           <DialogHeader className="bg-emerald-600 text-white px-4 py-3">
             <DialogTitle className="text-sm font-semibold">Add New Customer</DialogTitle>
           </DialogHeader>
           <div className="p-4 space-y-3">
             <div>
               <label className="text-[10px] text-gray-500 uppercase">Name *</label>
-              <Input ref={newCustomerNameRef} value={newCustomerForm.name} onChange={e => setNewCustomerForm({...newCustomerForm, name: e.target.value})} className="h-8 text-xs" />
+              <Input ref={newCustomerNameRef} value={newCustomerForm.name} onChange={e => setNewCustomerForm({...newCustomerForm, name: e.target.value})} className="h-8 text-xs" placeholder="Customer / Shop Name" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[10px] text-gray-500 uppercase">Mobile</label>
-                <Input value={newCustomerForm.mobile} onChange={e => setNewCustomerForm({...newCustomerForm, mobile: e.target.value})} className="h-8 text-xs" maxLength={10} />
+                <Input value={newCustomerForm.mobile} onChange={e => setNewCustomerForm({...newCustomerForm, mobile: e.target.value})} className="h-8 text-xs" maxLength={10} placeholder="10-digit mobile" />
               </div>
               <div>
                 <label className="text-[10px] text-gray-500 uppercase">City</label>
-                <Input value={newCustomerForm.city} onChange={e => setNewCustomerForm({...newCustomerForm, city: e.target.value})} className="h-8 text-xs" />
+                <Input value={newCustomerForm.city} onChange={e => setNewCustomerForm({...newCustomerForm, city: e.target.value})} className="h-8 text-xs" placeholder="City" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500 uppercase">Address</label>
+              <Input value={newCustomerForm.address} onChange={e => setNewCustomerForm({...newCustomerForm, address: e.target.value})} className="h-8 text-xs" placeholder="Shop / Street Address" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase">GSTIN</label>
+                <Input value={newCustomerForm.gstin} onChange={e => setNewCustomerForm({...newCustomerForm, gstin: e.target.value.toUpperCase()})} className="h-8 text-xs font-mono" maxLength={15} placeholder="27XXXXX1234X1Z5" />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase">Drug License No.</label>
+                <Input value={newCustomerForm.dlNumber} onChange={e => setNewCustomerForm({...newCustomerForm, dlNumber: e.target.value})} className="h-8 text-xs" placeholder="20B/21B-XX-XXXXX" />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-3 border-t">
               <Button variant="outline" size="sm" onClick={() => setShowAddCustomerModal(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleSaveNewCustomer} className="bg-emerald-600">Save</Button>
+              <Button size="sm" onClick={handleSaveNewCustomer} className="bg-emerald-600">Save Customer</Button>
             </div>
           </div>
         </DialogContent>

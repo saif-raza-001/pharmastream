@@ -29,7 +29,8 @@ export const getProducts = async (req: Request, res: Response) => {
     const categoryId = getString(req.query.categoryId);
     const stockStatus = getString(req.query.stockStatus);
     const page = getNumber(req.query.page, 1);
-    const limit = getNumber(req.query.limit, 50);
+    // Changed from 50 to 10000 to show all products
+    const limit = getNumber(req.query.limit, 10000);
     
     const where: any = { isActive: true };
     
