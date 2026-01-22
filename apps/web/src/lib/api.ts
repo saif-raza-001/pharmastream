@@ -89,7 +89,7 @@ export const reportsAPI = {
   getDashboard: () => api.get('/reports/dashboard'),
   getSales: (params?: any) => api.get('/reports/sales', { params }),
   getPurchases: (params?: any) => api.get('/reports/purchases', { params }),
-  getStock: (filter?: string) => api.get('/reports/stock', { params: { filter } }),
+  getStock: (filter?: string, categoryId?: string) => api.get('/reports/stock', { params: { filter, categoryId } }),
   getGST: (from: string, to: string) => api.get('/reports/gst', { params: { from, to } }),
 };
 

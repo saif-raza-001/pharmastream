@@ -128,9 +128,15 @@ export const getPurchaseReport = async (req: Request, res: Response) => {
 export const getStockReport = async (req: Request, res: Response) => {
   try {
     const filter = getString(req.query.filter) || 'all';
+    const categoryId = getString(req.query.categoryId);
+
+    const productWhere: any = { isActive: true };
+    if (categoryId) {
+      productWhere.categoryId = categoryId;
+    }
 
     const products = await prisma.product.findMany({
-      where: { isActive: true },
+      where: productWhere,
       include: {
         manufacturer: true,
         category: true,
@@ -143,45 +149,126 @@ export const getStockReport = async (req: Request, res: Response) => {
     });
 
     const today = new Date();
-    const thirtyDaysLater = new Date();
-    thirtyDaysLater.setDate(today.getDate() + 120);
+    today.setHours(0, 0, 0, 0);
+    
+    // 120 days for expiring filter
+    const expiryThreshold = new Date();
+    expiryThreshold.setDate(today.getDate() + 120);
 
-    let filteredProducts = products.map(p => ({
-      ...p,
-      totalStock: p.batches.reduce((sum, b) => sum + b.currentStock, 0),
-      stockValue: p.batches.reduce((sum, b) => sum + (b.currentStock * Number(b.purchaseRate)), 0),
-      nearestExpiry: p.batches.length > 0 ? p.batches[0].expiryDate : null
-    }));
+    // Create batch-level data for detailed view
+    let stockItems: any[] = [];
 
-    if (filter === 'low') {
-      filteredProducts = filteredProducts.filter(p => 
-        p.totalStock > 0 && p.totalStock < (p.minStockAlert || 50)
-      );
-    } else if (filter === 'out') {
-      filteredProducts = filteredProducts.filter(p => p.totalStock === 0);
-    } else if (filter === 'expiring') {
-      filteredProducts = filteredProducts.filter(p => 
-        p.batches.some(b => 
-          new Date(b.expiryDate) <= thirtyDaysLater && 
-          new Date(b.expiryDate) > today &&
-          b.currentStock > 0
-        )
-      );
-    } else if (filter === 'expired') {
-      filteredProducts = filteredProducts.filter(p => 
-        p.batches.some(b => 
-          new Date(b.expiryDate) < today && b.currentStock > 0
-        )
-      );
+    for (const product of products) {
+      for (const batch of product.batches) {
+        if (batch.currentStock <= 0) continue;
+
+        const expiryDate = new Date(batch.expiryDate);
+        const daysToExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const isExpired = expiryDate < today;
+        const isExpiringSoon = !isExpired && expiryDate <= expiryThreshold;
+
+        stockItems.push({
+          id: batch.id,
+          productId: product.id,
+          productName: product.name,
+          saltComposition: product.saltComposition,
+          manufacturer: product.manufacturer?.name || '-',
+          manufacturerShort: product.manufacturer?.shortName || product.manufacturer?.name || '-',
+          category: product.category?.name || '-',
+          categoryId: product.categoryId,
+          batchNo: batch.batchNo,
+          expiryDate: batch.expiryDate,
+          daysToExpiry,
+          isExpired,
+          isExpiringSoon,
+          currentStock: batch.currentStock,
+          mrp: Number(batch.mrp),
+          saleRate: Number(batch.saleRate),
+          purchaseRate: Number(batch.purchaseRate),
+          stockValue: batch.currentStock * Number(batch.purchaseRate),
+          rackLocation: product.rackLocation || '-',
+          gstRate: product.gstRate || 12,
+          minStockAlert: product.minStockAlert || 50
+        });
+      }
     }
 
+    // Apply filters
+    if (filter === 'low') {
+      // Group by product and check total stock
+      const productStocks: { [key: string]: number } = {};
+      stockItems.forEach(item => {
+        productStocks[item.productId] = (productStocks[item.productId] || 0) + item.currentStock;
+      });
+      stockItems = stockItems.filter(item => {
+        const totalStock = productStocks[item.productId];
+        return totalStock > 0 && totalStock < item.minStockAlert;
+      });
+    } else if (filter === 'out') {
+      // Products with zero total stock
+      const productStocks: { [key: string]: number } = {};
+      products.forEach(p => {
+        productStocks[p.id] = p.batches.reduce((sum, b) => sum + b.currentStock, 0);
+      });
+      // Show products with 0 stock (no batch entries)
+      const outOfStockProducts = products.filter(p => productStocks[p.id] === 0);
+      stockItems = outOfStockProducts.map(p => ({
+        id: p.id,
+        productId: p.id,
+        productName: p.name,
+        saltComposition: p.saltComposition,
+        manufacturer: p.manufacturer?.name || '-',
+        manufacturerShort: p.manufacturer?.shortName || p.manufacturer?.name || '-',
+        category: p.category?.name || '-',
+        categoryId: p.categoryId,
+        batchNo: '-',
+        expiryDate: null,
+        daysToExpiry: null,
+        isExpired: false,
+        isExpiringSoon: false,
+        currentStock: 0,
+        mrp: 0,
+        saleRate: 0,
+        purchaseRate: 0,
+        stockValue: 0,
+        rackLocation: p.rackLocation || '-',
+        gstRate: p.gstRate || 12,
+        minStockAlert: p.minStockAlert || 50
+      }));
+    } else if (filter === 'expiring') {
+      stockItems = stockItems.filter(item => item.isExpiringSoon);
+    } else if (filter === 'expired') {
+      stockItems = stockItems.filter(item => item.isExpired);
+    }
+
+    // Sort by expiry date for expiring/expired filters
+    if (filter === 'expiring' || filter === 'expired') {
+      stockItems.sort((a, b) => {
+        if (!a.expiryDate) return 1;
+        if (!b.expiryDate) return -1;
+        return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+      });
+    }
+
+    // Get all categories for filter dropdown
+    const categories = await prisma.category.findMany({
+      orderBy: { name: 'asc' }
+    });
+
     const summary = {
-      totalProducts: filteredProducts.length,
-      totalStock: filteredProducts.reduce((sum, p) => sum + p.totalStock, 0),
-      totalValue: filteredProducts.reduce((sum, p) => sum + p.stockValue, 0)
+      totalProducts: new Set(stockItems.map(i => i.productId)).size,
+      totalBatches: stockItems.length,
+      totalStock: stockItems.reduce((sum, item) => sum + item.currentStock, 0),
+      totalValue: stockItems.reduce((sum, item) => sum + item.stockValue, 0),
+      expiringCount: stockItems.filter(i => i.isExpiringSoon).length,
+      expiredCount: stockItems.filter(i => i.isExpired).length
     };
 
-    res.json({ products: filteredProducts, summary });
+    res.json({ 
+      products: stockItems, 
+      summary,
+      categories
+    });
   } catch (error) {
     console.error('Stock report error:', error);
     res.status(500).json({ error: 'Failed to generate stock report' });
@@ -285,8 +372,9 @@ export const getDashboard = async (req: Request, res: Response) => {
     const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
 
-    const thirtyDaysLater = new Date();
-    thirtyDaysLater.setDate(today.getDate() + 120);
+    // 120 days for expiry alert
+    const expiryThreshold = new Date();
+    expiryThreshold.setDate(today.getDate() + 120);
 
     const todaySales = await prisma.salesInvoice.aggregate({
       where: { invoiceDate: { gte: today, lt: tomorrow } },
@@ -324,11 +412,12 @@ export const getDashboard = async (req: Request, res: Response) => {
       _count: true
     });
 
+    // Expiring in 120 days
     const expiringSoon = await prisma.productBatch.count({
       where: {
         isActive: true,
         currentStock: { gt: 0 },
-        expiryDate: { gte: today, lte: thirtyDaysLater }
+        expiryDate: { gte: today, lte: expiryThreshold }
       }
     });
 

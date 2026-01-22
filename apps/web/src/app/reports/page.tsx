@@ -39,6 +39,9 @@ function ReportsContent() {
   const [gstData, setGstData] = useState<any>(null);
   
   const [stockFilter, setStockFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [stockSearch, setStockSearch] = useState('');
+  const [categories, setCategories] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
@@ -53,7 +56,7 @@ function ReportsContent() {
     else if (activeTab === 'purchases') fetchPurchaseReport();
     else if (activeTab === 'stock') fetchStockReport();
     else if (activeTab === 'gst') fetchGSTReport();
-  }, [activeTab, stockFilter]);
+  }, [activeTab, stockFilter, categoryFilter]);
 
   const fetchAccounts = async () => {
     try {
@@ -99,8 +102,11 @@ function ReportsContent() {
   const fetchStockReport = async () => {
     setLoading(true);
     try {
-      const res = await reportsAPI.getStock(stockFilter);
+      const res = await reportsAPI.getStock(stockFilter, categoryFilter);
       setStockData(res.data);
+      if (res.data.categories) {
+        setCategories(res.data.categories);
+      }
     } catch (err) {
       toast.error('Failed to load stock report');
     }
@@ -138,6 +144,40 @@ function ReportsContent() {
     return new Date(date).toLocaleDateString('en-IN');
   };
 
+  const formatExpiry = (date: string) => {
+    if (!date) return '-';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+  };
+
+  // Filter stock items by search
+  const getFilteredStockItems = () => {
+    if (!stockData?.products) return [];
+    if (!stockSearch.trim()) return stockData.products;
+    
+    const search = stockSearch.toLowerCase();
+    return stockData.products.filter((item: any) => 
+      item.productName?.toLowerCase().includes(search) ||
+      item.batchNo?.toLowerCase().includes(search) ||
+      item.manufacturer?.toLowerCase().includes(search) ||
+      item.category?.toLowerCase().includes(search) ||
+      item.rackLocation?.toLowerCase().includes(search)
+    );
+  };
+
+  const getExpiryBadge = (item: any) => {
+    if (item.isExpired) {
+      return <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[10px] font-bold">EXPIRED</span>;
+    }
+    if (item.isExpiringSoon) {
+      if (item.daysToExpiry <= 30) {
+        return <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[10px] font-bold">{item.daysToExpiry}D</span>;
+      }
+      return <span className="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded text-[10px]">{item.daysToExpiry}D</span>;
+    }
+    return <span className="text-gray-500 text-[10px]">{item.daysToExpiry}D</span>;
+  };
+
   return (
     <div className="flex flex-col h-screen print:h-auto">
       <header className="h-11 bg-indigo-700 flex items-center justify-between px-4 shrink-0 print:hidden">
@@ -169,7 +209,7 @@ function ReportsContent() {
       </div>
 
       <div className="bg-gray-50 px-4 py-3 border-b shrink-0 print:hidden">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           {(activeTab === 'sales' || activeTab === 'purchases' || activeTab === 'gst') && (
             <>
               <div>
@@ -226,20 +266,44 @@ function ReportsContent() {
           )}
           
           {activeTab === 'stock' && (
-            <div>
-              <label className="text-[10px] text-gray-500 uppercase block">Filter</label>
-              <select 
-                value={stockFilter} 
-                onChange={e => { setStockFilter(e.target.value); }}
-                className="h-8 text-xs border rounded px-2 w-48"
-              >
-                <option value="all">All Products</option>
-                <option value="low">Low Stock</option>
-                <option value="out">Out of Stock</option>
-                <option value="expiring">Expiring in 30 Days</option>
-                <option value="expired">Expired</option>
-              </select>
-            </div>
+            <>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase block">Filter</label>
+                <select 
+                  value={stockFilter} 
+                  onChange={e => { setStockFilter(e.target.value); }}
+                  className="h-8 text-xs border rounded px-2 w-44"
+                >
+                  <option value="all">All Products</option>
+                  <option value="low">Low Stock</option>
+                  <option value="out">Out of Stock</option>
+                  <option value="expiring">Expiring in 120 Days</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase block">Category</label>
+                <select 
+                  value={categoryFilter} 
+                  onChange={e => { setCategoryFilter(e.target.value); }}
+                  className="h-8 text-xs border rounded px-2 w-40"
+                >
+                  <option value="">All Categories</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase block">Search</label>
+                <Input 
+                  placeholder="Product, Batch, Rack..."
+                  value={stockSearch}
+                  onChange={e => setStockSearch(e.target.value)}
+                  className="h-8 text-xs w-48"
+                />
+              </div>
+            </>
           )}
           
           {(activeTab === 'sales' || activeTab === 'purchases' || activeTab === 'gst') && (
@@ -379,28 +443,41 @@ function ReportsContent() {
 
         {activeTab === 'stock' && stockData && !loading && (
           <div>
-            <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-6 gap-4 mb-6">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="text-xs text-blue-600">Total Products</div>
+                <div className="text-xs text-blue-600">Products</div>
                 <div className="text-2xl font-bold text-blue-700">{stockData.summary?.totalProducts || 0}</div>
               </div>
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                <div className="text-xs text-purple-600">Total Stock</div>
-                <div className="text-xl font-bold text-purple-700">{(stockData.summary?.totalStock || 0).toLocaleString()}</div>
+                <div className="text-xs text-purple-600">Batches</div>
+                <div className="text-xl font-bold text-purple-700">{stockData.summary?.totalBatches || 0}</div>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                <div className="text-xs text-indigo-600">Total Stock</div>
+                <div className="text-xl font-bold text-indigo-700">{(stockData.summary?.totalStock || 0).toLocaleString()}</div>
               </div>
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="text-xs text-green-600">Stock Value</div>
                 <div className="text-lg font-bold text-green-700">{formatCurrency(stockData.summary?.totalValue)}</div>
               </div>
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                <div className="text-xs text-emerald-600">Showing</div>
-                <div className="text-2xl font-bold text-emerald-700">{stockData.products?.length || 0}</div>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="text-xs text-yellow-600">Expiring (120D)</div>
+                <div className="text-xl font-bold text-yellow-700">{stockData.summary?.expiringCount || 0}</div>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="text-xs text-red-600">Expired</div>
+                <div className="text-xl font-bold text-red-700">{stockData.summary?.expiredCount || 0}</div>
               </div>
             </div>
 
             <div className="border rounded-lg overflow-hidden">
-              <div className="bg-gray-100 px-4 py-2 text-xs font-semibold">
-                Stock Details ({stockData.products?.length || 0})
+              <div className="bg-gray-100 px-4 py-2 text-xs font-semibold flex justify-between items-center">
+                <span>Stock Details ({getFilteredStockItems().length})</span>
+                {stockFilter !== 'all' && (
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
+                    Filter: {stockFilter === 'expiring' ? 'Expiring in 120 Days' : stockFilter}
+                  </span>
+                )}
               </div>
               <div className="max-h-[500px] overflow-auto">
                 <table className="w-full text-xs">
@@ -408,21 +485,49 @@ function ReportsContent() {
                     <tr>
                       <th className="p-2 text-left">Product</th>
                       <th className="p-2 text-left">Manufacturer</th>
+                      <th className="p-2 text-left">Category</th>
+                      <th className="p-2 text-center">Batch</th>
+                      <th className="p-2 text-center">Expiry</th>
+                      <th className="p-2 text-center">Days</th>
                       <th className="p-2 text-right">Stock</th>
+                      <th className="p-2 text-right">MRP</th>
+                      <th className="p-2 text-right">S.Rate</th>
                       <th className="p-2 text-right">Value</th>
                       <th className="p-2 text-center">Rack</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {stockData.products?.map((item: any) => (
-                      <tr key={item.id} className="border-t hover:bg-gray-50">
-                        <td className="p-2 font-medium">{item.name}</td>
-                        <td className="p-2">{item.manufacturer?.name}</td>
-                        <td className="p-2 text-right">{item.totalStock || 0}</td>
+                    {getFilteredStockItems().map((item: any, idx: number) => (
+                      <tr key={`${item.id}-${idx}`} className={`border-t hover:bg-gray-50 ${item.isExpired ? 'bg-red-50' : item.isExpiringSoon ? 'bg-yellow-50' : ''}`}>
+                        <td className="p-2">
+                          <div className="font-medium">{item.productName}</div>
+                          {item.saltComposition && <div className="text-[10px] text-gray-400">{item.saltComposition}</div>}
+                        </td>
+                        <td className="p-2 text-[10px]">{item.manufacturerShort || item.manufacturer}</td>
+                        <td className="p-2 text-[10px]">{item.category}</td>
+                        <td className="p-2 text-center font-mono text-[10px]">{item.batchNo}</td>
+                        <td className="p-2 text-center">{formatExpiry(item.expiryDate)}</td>
+                        <td className="p-2 text-center">{getExpiryBadge(item)}</td>
+                        <td className={`p-2 text-right font-semibold ${item.currentStock === 0 ? 'text-red-600' : item.currentStock < 50 ? 'text-orange-600' : 'text-green-600'}`}>
+                          {item.currentStock}
+                        </td>
+                        <td className="p-2 text-right">₹{item.mrp?.toFixed(2) || '0.00'}</td>
+                        <td className="p-2 text-right">₹{item.saleRate?.toFixed(2) || '0.00'}</td>
                         <td className="p-2 text-right">{formatCurrency(item.stockValue)}</td>
-                        <td className="p-2 text-center">{item.rackLocation || '-'}</td>
+                        <td className="p-2 text-center">
+                          {item.rackLocation !== '-' ? (
+                            <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-bold">{item.rackLocation}</span>
+                          ) : '-'}
+                        </td>
                       </tr>
                     ))}
+                    {getFilteredStockItems().length === 0 && (
+                      <tr>
+                        <td colSpan={11} className="p-8 text-center text-gray-400">
+                          No items found
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
