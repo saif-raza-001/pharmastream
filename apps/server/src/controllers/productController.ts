@@ -141,17 +141,39 @@ export const getProductById = async (req: Request, res: Response) => {
   }
 };
 
+// ============ FIXED: Check Name + Manufacturer before creating ============
 export const createProduct = async (req: Request, res: Response) => {
   try {
     const { name, barcode, saltComposition, hsnCode, manufacturerId, categoryId, packingInfo, conversionFactor, rackLocation, gstRate, minStockAlert } = req.body;
     
+    // Check if barcode already exists
     if (barcode) {
-      const existing = await prisma.product.findFirst({ where: { barcode } });
-      if (existing) {
+      const existingBarcode = await prisma.product.findFirst({ where: { barcode } });
+      if (existingBarcode) {
         return res.status(400).json({ error: 'Barcode already exists' });
       }
     }
     
+    // CHECK: If product with same Name + Manufacturer already exists, return it
+    const allProductsForMfg = await prisma.product.findMany({
+      where: { manufacturerId: manufacturerId, isActive: true },
+      include: { 
+        manufacturer: true, 
+        category: true, 
+        batches: { where: { isActive: true }, orderBy: { expiryDate: 'asc' } } 
+      }
+    });
+    
+    const existingProduct = allProductsForMfg.find(
+      p => p.name.toLowerCase().trim() === name.toLowerCase().trim()
+    );
+    
+    if (existingProduct) {
+      // Product already exists - return it so frontend can add batch to it
+      return res.status(200).json({ ...existingProduct, alreadyExists: true });
+    }
+    
+    // Create new product
     const product = await prisma.product.create({
       data: {
         name,
