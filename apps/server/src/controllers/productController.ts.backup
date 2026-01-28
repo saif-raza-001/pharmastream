@@ -298,7 +298,6 @@ export const addBatch = async (req: Request, res: Response) => {
 };
 
 // ============ UPDATED: importProducts with netPrice support ============
-// ============ UPDATED: importProducts with last batch rates fallback ============
 export const importProducts = async (req: Request, res: Response) => {
   try {
     const { products } = req.body;
@@ -355,84 +354,67 @@ export const importProducts = async (req: Request, res: Response) => {
         }
 
         // ============ PRODUCT: Find or Create ============
-        let existing: any = null;
+        let existing = null;
         let wasInactive = false;
         
-        // Try to find ACTIVE product by barcode first (include batches for rate fallback)
+        // Try to find ACTIVE product by barcode first
         if (p.barcode) {
           existing = await prisma.product.findFirst({
-            where: { barcode: p.barcode, isActive: true },
-            include: { batches: { where: { isActive: true }, orderBy: { createdAt: 'desc' }, take: 1 } }
+            where: { barcode: p.barcode, isActive: true }
           });
         }
         
         // If not found by barcode, try by name + manufacturer (ACTIVE only)
         if (!existing) {
           const allProducts = await prisma.product.findMany({
-            where: { manufacturerId: manufacturer.id, isActive: true },
-            include: { batches: { where: { isActive: true }, orderBy: { createdAt: 'desc' }, take: 1 } }
+            where: { manufacturerId: manufacturer.id, isActive: true }
           });
           existing = allProducts.find(
-            (prod: any) => prod.name.toLowerCase() === p.name.toLowerCase().trim()
+            prod => prod.name.toLowerCase() === p.name.toLowerCase().trim()
           );
         }
 
         // If still not found, check if there's an INACTIVE product we can reactivate
         if (!existing) {
-          let inactiveProduct: any = null;
+          let inactiveProduct = null;
           
           if (p.barcode) {
             inactiveProduct = await prisma.product.findFirst({
-              where: { barcode: p.barcode, isActive: false },
-              include: { batches: { where: { isActive: true }, orderBy: { createdAt: 'desc' }, take: 1 } }
+              where: { barcode: p.barcode, isActive: false }
             });
           }
           
           if (!inactiveProduct) {
             const inactiveProducts = await prisma.product.findMany({
-              where: { manufacturerId: manufacturer.id, isActive: false },
-              include: { batches: { where: { isActive: true }, orderBy: { createdAt: 'desc' }, take: 1 } }
+              where: { manufacturerId: manufacturer.id, isActive: false }
             });
             inactiveProduct = inactiveProducts.find(
-              (prod: any) => prod.name.toLowerCase() === p.name.toLowerCase().trim()
+              prod => prod.name.toLowerCase() === p.name.toLowerCase().trim()
             );
           }
           
           if (inactiveProduct) {
+            // Reactivate the product
             existing = inactiveProduct;
             wasInactive = true;
           }
         }
 
-        // ✅ NEW: Get last batch rates as fallback
-        const lastBatch = existing?.batches?.[0];
-        
-        // Get GST rate
+        // Get GST rate for netPrice calculation
         const gstRate = Number(p.gst) || Number(p.gstRate) || existing?.gstRate || 12;
+        const saleRate = Number(p.saleRate) || Number(p.sRate) || 0;
         
-        // ✅ UPDATED: Use Excel value → Last batch value → 0
-        const saleRate = Number(p.saleRate) || Number(p.sRate) || (lastBatch ? Number(lastBatch.saleRate) : 0);
-        const mrp = Number(p.mrp) || (lastBatch ? Number(lastBatch.mrp) : 0);
-        const purchaseRate = Number(p.purchaseRate) || Number(p.pRate) || (lastBatch ? Number(lastBatch.purchaseRate) : 0);
-        
-        // ✅ UPDATED: NetPrice fallback chain: Excel → Last batch → Calculate → 0
-        let netPrice: number;
-        if (p.netPrice) {
-          netPrice = Number(p.netPrice);
-        } else if (lastBatch?.netPrice) {
-          netPrice = Number(lastBatch.netPrice);
-        } else if (saleRate > 0) {
-          netPrice = saleRate * (1 + gstRate / 100);
-        } else {
-          netPrice = 0;
-        }
+        // Calculate netPrice: Use provided OR calculate from saleRate + GST
+        const netPrice = p.netPrice 
+          ? Number(p.netPrice) 
+          : (saleRate * (1 + gstRate / 100));
 
         if (existing) {
           // Update existing product (or reactivate if was inactive)
           await prisma.product.update({
             where: { id: existing.id },
             data: {
-              isActive: true,
+              isActive: true,  // Reactivate if was deleted
               barcode: p.barcode || existing.barcode,
               saltComposition: p.salt || p.saltComposition || existing.saltComposition,
               packingInfo: p.packing || p.packingInfo || existing.packingInfo,
@@ -444,7 +426,7 @@ export const importProducts = async (req: Request, res: Response) => {
           });
           
           if (wasInactive) {
-            created++;
+            created++;  // Count as created since it was reactivated
             console.log(`Reactivated product: ${existing.name}`);
           } else {
             updated++;
@@ -454,6 +436,7 @@ export const importProducts = async (req: Request, res: Response) => {
           if ((p.quantity || p.qty) && p.batchNo) {
             const batchQty = Number(p.quantity) || Number(p.qty) || 0;
             if (batchQty > 0) {
+              // Check if batch exists
               const existingBatch = await prisma.productBatch.findFirst({
                 where: { productId: existing.id, batchNo: p.batchNo }
               });
@@ -469,9 +452,9 @@ export const importProducts = async (req: Request, res: Response) => {
                     productId: existing.id,
                     batchNo: p.batchNo || 'OPENING',
                     expiryDate: parseExpiryDate(p.expiry),
-                    mrp: mrp,
+                    mrp: Number(p.mrp) || 0,
                     saleRate: saleRate,
-                    purchaseRate: purchaseRate,
+                    purchaseRate: Number(p.purchaseRate) || Number(p.pRate) || 0,
                     netPrice: netPrice,
                     currentStock: batchQty
                   }
@@ -505,9 +488,9 @@ export const importProducts = async (req: Request, res: Response) => {
                 productId: newProduct.id,
                 batchNo: p.batchNo || 'OPENING',
                 expiryDate: parseExpiryDate(p.expiry),
-                mrp: mrp,
+                mrp: Number(p.mrp) || 0,
                 saleRate: saleRate,
-                purchaseRate: purchaseRate,
+                purchaseRate: Number(p.purchaseRate) || Number(p.pRate) || 0,
                 netPrice: netPrice,
                 currentStock: batchQty
               }
@@ -523,7 +506,7 @@ export const importProducts = async (req: Request, res: Response) => {
     res.json({ 
       created, 
       updated, 
-      errors: errors.slice(0, 10),
+      errors: errors.slice(0, 10), // Return first 10 errors only
       total: products.length,
       success: true
     });
@@ -533,6 +516,7 @@ export const importProducts = async (req: Request, res: Response) => {
   }
 };
 
+// Helper to parse various expiry date formats
 function parseExpiryDate(expiry: string | number): Date {
   // Default: 2 years from now
   const getDefault = () => {

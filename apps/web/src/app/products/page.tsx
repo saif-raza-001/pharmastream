@@ -19,12 +19,12 @@ export default function ProductsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('quickentry');
   const [search, setSearch] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
-  
+
   const [products, setProducts] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [manufacturers, setManufacturers] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  
+
   const [showProductModal, setShowProductModal] = useState(false);
   const [showManufacturerModal, setShowManufacturerModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -48,15 +48,20 @@ export default function ProductsPage() {
   const [savingInlineMfg, setSavingInlineMfg] = useState(false);
   const [savingInlineCat, setSavingInlineCat] = useState(false);
 
+  // NEW: Product suggestions for quick entry
+  const [productSuggestions, setProductSuggestions] = useState<any[]>([]);
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+
   const [productForm, setProductForm] = useState({
-    name: '', 
-    barcode: '', 
-    saltComposition: '', 
-    hsnCode: '3004', 
-    manufacturerId: '', 
-    categoryId: '', 
-    packingInfo: '', 
-    rackLocation: '', 
+    name: '',
+    barcode: '',
+    saltComposition: '',
+    hsnCode: '3004',
+    manufacturerId: '',
+    categoryId: '',
+    packingInfo: '',
+    rackLocation: '',
     gstRate: 12,
     minStockAlert: 50
   });
@@ -66,11 +71,11 @@ export default function ProductsPage() {
 
   const [addInitialStock, setAddInitialStock] = useState(false);
   const [stockForm, setStockForm] = useState({
-    batchNo: '', expiryDate: '', quantity: 0, purchaseRate: 0, mrp: 0, saleRate: 0
+    batchNo: '', expiryDate: '', quantity: 0, purchaseRate: 0, mrp: 0, saleRate: 0, netPrice: 0
   });
 
   const [batchForm, setBatchForm] = useState({
-    batchNo: '', expiryDate: '', quantity: 0, purchaseRate: 0, mrp: 0, saleRate: 0
+    batchNo: '', expiryDate: '', quantity: 0, purchaseRate: 0, mrp: 0, saleRate: 0, netPrice: 0
   });
 
   const [mfgForm, setMfgForm] = useState({ name: '', shortName: '', address: '', gstin: '' });
@@ -79,7 +84,7 @@ export default function ProductsPage() {
 
   const [quickProducts, setQuickProducts] = useState<any[]>([]);
   const [existingBatches, setExistingBatches] = useState<any[]>([]);
-  
+
   const quickBarcodeRef = useRef<HTMLInputElement>(null);
   const quickNameRef = useRef<HTMLInputElement>(null);
   const quickMfgRef = useRef<HTMLInputElement>(null);
@@ -94,13 +99,14 @@ export default function ProductsPage() {
   const quickPRateRef = useRef<HTMLInputElement>(null);
   const quickMrpRef = useRef<HTMLInputElement>(null);
   const quickSRateRef = useRef<HTMLInputElement>(null);
+  const quickNetPriceRef = useRef<HTMLInputElement>(null);
   const inlineMfgInputRef = useRef<HTMLInputElement>(null);
   const inlineCatInputRef = useRef<HTMLInputElement>(null);
 
   const [quickForm, setQuickForm] = useState({
     barcode: '', name: '', manufacturer: '', category: '', salt: '',
     packing: '', rackLocation: '', gstRate: 12,
-    batchNo: '', expiry: '', qty: 0, pRate: 0, mrp: 0, sRate: 0
+    batchNo: '', expiry: '', qty: 0, pRate: 0, mrp: 0, sRate: 0, netPrice: 0
   });
 
   useEffect(() => {
@@ -208,7 +214,8 @@ export default function ProductsPage() {
             currentStock: stockForm.quantity,
             purchaseRate: stockForm.purchaseRate || stockForm.saleRate * 0.8,
             mrp: stockForm.mrp,
-            saleRate: stockForm.saleRate
+            saleRate: stockForm.saleRate,
+            netPrice: stockForm.netPrice || null
           });
           toast.success('Initial stock added');
         }
@@ -270,7 +277,7 @@ export default function ProductsPage() {
 
   const resetProductForm = () => {
     setProductForm({ name: '', barcode: '', saltComposition: '', hsnCode: '3004', manufacturerId: '', categoryId: '', packingInfo: '', rackLocation: '', gstRate: 12, minStockAlert: 50 });
-    setStockForm({ batchNo: '', expiryDate: '', quantity: 0, purchaseRate: 0, mrp: 0, saleRate: 0 });
+    setStockForm({ batchNo: '', expiryDate: '', quantity: 0, purchaseRate: 0, mrp: 0, saleRate: 0, netPrice: 0 });
     setProductBatches([]);
     setAddInitialStock(false);
     setSelectedProduct(null);
@@ -351,7 +358,6 @@ export default function ProductsPage() {
     } catch (err) { toast.error('Failed'); }
   };
 
-  // PASTE FROM EXCEL IMPORT
   const handleExcelImport = async () => {
     if (!excelData.trim()) { toast.error('Paste data from Excel first'); return; }
     try {
@@ -360,12 +366,13 @@ export default function ProductsPage() {
       for (const line of lines) {
         const cols = line.split(/\t/).map(c => c.trim());
         if (cols.length < 2) continue;
-        const [name, salt, manufacturer, category, packing, rack, gst, hsn, batchNo, expiry, qty, pRate, mrp, sRate] = cols;
+        const [name, salt, manufacturer, category, packing, rack, gst, hsn, batchNo, expiry, qty, pRate, mrp, sRate, netPrice] = cols;
         if (!name || !manufacturer) continue;
         products.push({
           name, salt: salt || '', manufacturer, category: category || '', packing: packing || '', rack: rack || '',
           gst: parseFloat(gst) || 12, hsn: hsn || '3004', batchNo: batchNo || '', expiry: expiry || '',
-          quantity: parseInt(qty) || 0, purchaseRate: parseFloat(pRate) || 0, mrp: parseFloat(mrp) || 0, saleRate: parseFloat(sRate) || 0
+          quantity: parseInt(qty) || 0, purchaseRate: parseFloat(pRate) || 0, mrp: parseFloat(mrp) || 0, 
+          saleRate: parseFloat(sRate) || 0, netPrice: parseFloat(netPrice) || null
         });
       }
       if (products.length === 0) { toast.error('No valid data found'); return; }
@@ -381,7 +388,6 @@ export default function ProductsPage() {
     }
   };
 
-  // BATCH HANDLERS
   const handleEditBatch = (batch: any) => {
     setEditingBatch(batch);
     setBatchForm({
@@ -390,7 +396,8 @@ export default function ProductsPage() {
       quantity: batch.currentStock,
       purchaseRate: Number(batch.purchaseRate),
       mrp: Number(batch.mrp),
-      saleRate: Number(batch.saleRate)
+      saleRate: Number(batch.saleRate),
+      netPrice: Number(batch.netPrice) || 0
     });
     setShowBatchModal(true);
   };
@@ -411,9 +418,27 @@ export default function ProductsPage() {
     }
   };
 
+  // ✅ UPDATED: Auto-fill rates from last batch
   const openAddBatchModal = () => {
     setEditingBatch(null);
-    setBatchForm({ batchNo: '', expiryDate: '', quantity: 0, purchaseRate: 0, mrp: 0, saleRate: 0 });
+    
+    // Get last batch's rates if product has batches
+    const lastBatch = selectedProduct?.batches?.[selectedProduct.batches.length - 1];
+    
+    setBatchForm({ 
+      batchNo: '', 
+      expiryDate: '', 
+      quantity: 0, 
+      purchaseRate: lastBatch ? Number(lastBatch.purchaseRate) : 0,
+      mrp: lastBatch ? Number(lastBatch.mrp) : 0,
+      saleRate: lastBatch ? Number(lastBatch.saleRate) : 0, 
+      netPrice: lastBatch ? Number(lastBatch.netPrice) || 0 : 0 
+    });
+    
+    if (lastBatch) {
+      toast.info(`💰 Rates loaded from last batch`);
+    }
+    
     setShowBatchModal(true);
   };
 
@@ -431,7 +456,8 @@ export default function ProductsPage() {
         currentStock: batchForm.quantity,
         purchaseRate: batchForm.purchaseRate || batchForm.saleRate * 0.8,
         mrp: batchForm.mrp,
-        saleRate: batchForm.saleRate
+        saleRate: batchForm.saleRate,
+        netPrice: batchForm.netPrice || null
       });
       toast.success("Stock added");
       const res = await productsAPI.getById(productId);
@@ -456,7 +482,8 @@ export default function ProductsPage() {
         currentStock: batchForm.quantity,
         purchaseRate: batchForm.purchaseRate || batchForm.saleRate * 0.8,
         mrp: batchForm.mrp,
-        saleRate: batchForm.saleRate
+        saleRate: batchForm.saleRate,
+        netPrice: batchForm.netPrice || null
       });
       toast.success("Batch updated");
       if (selectedProduct?.id) {
@@ -478,6 +505,7 @@ export default function ProductsPage() {
     try {
       const res = await productsAPI.getByBarcode(quickForm.barcode);
       toast.success(`Found: ${res.data.name}`);
+      const lastBatch = res.data.batches?.[res.data.batches.length - 1];
       setQuickForm(prev => ({
         ...prev,
         name: res.data.name,
@@ -486,12 +514,14 @@ export default function ProductsPage() {
         salt: res.data.saltComposition || '',
         packing: res.data.packingInfo || '',
         rackLocation: res.data.rackLocation || '',
-        gstRate: res.data.gstRate || 12
+        gstRate: res.data.gstRate || 12,
+        mrp: lastBatch ? Number(lastBatch.mrp) : 0,
+        sRate: lastBatch ? Number(lastBatch.saleRate) : 0,
+        pRate: lastBatch ? Number(lastBatch.purchaseRate) : 0,
+        netPrice: lastBatch ? Number(lastBatch.netPrice) || 0 : 0
       }));
       if (res.data.batches && res.data.batches.length > 0) {
         setExistingBatches(res.data.batches);
-        const lastBatch = res.data.batches[res.data.batches.length - 1];
-        setQuickForm(prev => ({ ...prev, mrp: Number(lastBatch.mrp), sRate: Number(lastBatch.saleRate), pRate: Number(lastBatch.purchaseRate) }));
         setShowBatchSuggestionModal(true);
       } else {
         quickBatchRef.current?.focus();
@@ -499,6 +529,95 @@ export default function ProductsPage() {
     } catch (err) {
       toast.info("New product - Enter all details");
       quickNameRef.current?.focus();
+    }
+  };
+
+  // ✅ NEW: Handle product name typing - show suggestions
+  const handleQuickNameChange = (value: string) => {
+    setQuickForm({...quickForm, name: value});
+    
+    if (value.length >= 2) {
+      const searchLower = value.toLowerCase();
+      const matches = products.filter(p => 
+        p.name.toLowerCase().includes(searchLower) ||
+        p.saltComposition?.toLowerCase().includes(searchLower) ||
+        p.barcode?.toLowerCase().includes(searchLower)
+      ).slice(0, 10); // Max 10 suggestions
+      
+      setProductSuggestions(matches);
+      setShowProductSuggestions(matches.length > 0);
+      setSelectedSuggestionIndex(-1);
+    } else {
+      setProductSuggestions([]);
+      setShowProductSuggestions(false);
+    }
+  };
+
+  // ✅ NEW: Select product from suggestions - auto-fill everything!
+  const handleSelectProductSuggestion = (product: any) => {
+    const lastBatch = product.batches?.[product.batches.length - 1];
+    
+    setQuickForm(prev => ({
+      ...prev,
+      name: product.name,
+      barcode: product.barcode || '',
+      manufacturer: product.manufacturer?.name || '',
+      category: product.category?.name || '',
+      salt: product.saltComposition || '',
+      packing: product.packingInfo || '',
+      rackLocation: product.rackLocation || '',
+      gstRate: product.gstRate || 12,
+      // Auto-fill from last batch
+      mrp: lastBatch ? Number(lastBatch.mrp) : 0,
+      sRate: lastBatch ? Number(lastBatch.saleRate) : 0,
+      pRate: lastBatch ? Number(lastBatch.purchaseRate) : 0,
+      netPrice: lastBatch ? Number(lastBatch.netPrice) || 0 : 0
+    }));
+    
+    setProductSuggestions([]);
+    setShowProductSuggestions(false);
+    
+    if (lastBatch) {
+      toast.success(`✓ ${product.name} - Rates loaded from last batch`);
+    } else {
+      toast.success(`✓ ${product.name} selected`);
+    }
+    
+    // Focus on batch field since product is selected
+    setTimeout(() => quickBatchRef.current?.focus(), 100);
+  };
+
+  // ✅ NEW: Handle keyboard navigation in suggestions
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (!showProductSuggestions || productSuggestions.length === 0) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        quickMfgRef.current?.focus();
+      }
+      return;
+    }
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev => 
+        prev < productSuggestions.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedSuggestionIndex >= 0) {
+        handleSelectProductSuggestion(productSuggestions[selectedSuggestionIndex]);
+      } else if (productSuggestions.length > 0) {
+        handleSelectProductSuggestion(productSuggestions[0]);
+      } else {
+        quickMfgRef.current?.focus();
+      }
+    } else if (e.key === 'Escape') {
+      setShowProductSuggestions(false);
+    } else if (e.key === 'Tab') {
+      setShowProductSuggestions(false);
     }
   };
 
@@ -510,6 +629,7 @@ export default function ProductsPage() {
       mrp: Number(batch.mrp),
       sRate: Number(batch.saleRate),
       pRate: Number(batch.purchaseRate),
+      netPrice: Number(batch.netPrice) || 0,
       qty: 0
     }));
     setShowBatchSuggestionModal(false);
@@ -529,6 +649,13 @@ export default function ProductsPage() {
 
   const autoCalculatePurchaseRate = () => {
     if (quickForm.sRate) { setQuickForm(prev => ({ ...prev, pRate: Math.round(quickForm.sRate * 0.75) })); }
+  };
+
+  const autoCalculateNetPrice = () => {
+    if (quickForm.sRate && !quickForm.netPrice) {
+      const calculated = quickForm.sRate * (1 + quickForm.gstRate / 100);
+      setQuickForm(prev => ({ ...prev, netPrice: Math.round(calculated * 100) / 100 }));
+    }
   };
 
   const handleQuickAdd = async () => {
@@ -558,6 +685,16 @@ export default function ProductsPage() {
         try { const res = await productsAPI.getByBarcode(quickForm.barcode); productId = res.data.id; } catch (e) {}
       }
       if (!productId) {
+        // Try to find by name + manufacturer
+        const existingProduct = products.find(p => 
+          p.name.toLowerCase() === quickForm.name.toLowerCase() && 
+          p.manufacturer?.name?.toLowerCase() === quickForm.manufacturer.toLowerCase()
+        );
+        if (existingProduct) {
+          productId = existingProduct.id;
+        }
+      }
+      if (!productId) {
         const productRes = await productsAPI.create({
           name: quickForm.name, barcode: quickForm.barcode || null, saltComposition: quickForm.salt,
           manufacturerId: mfg.id, categoryId, packingInfo: quickForm.packing, rackLocation: quickForm.rackLocation,
@@ -569,11 +706,12 @@ export default function ProductsPage() {
       await productsAPI.addBatch({
         productId, batchNo: quickForm.batchNo, expiryDate: parseExpiryInput(quickForm.expiry),
         currentStock: quickForm.qty, purchaseRate: quickForm.pRate || quickForm.sRate * 0.75,
-        mrp: quickForm.mrp, saleRate: quickForm.sRate
+        mrp: quickForm.mrp, saleRate: quickForm.sRate,
+        netPrice: quickForm.netPrice || null
       });
       toast.success(`✓ Added: ${quickForm.name} | Batch: ${quickForm.batchNo} | Qty: ${quickForm.qty}`);
       setQuickProducts([{ ...quickForm, timestamp: new Date().toLocaleTimeString(), id: Date.now() }, ...quickProducts.slice(0, 19)]);
-      setQuickForm({ barcode: '', name: '', manufacturer: '', category: '', salt: '', packing: '', rackLocation: '', gstRate: 12, batchNo: '', expiry: '', qty: 0, pRate: 0, mrp: 0, sRate: 0 });
+      setQuickForm({ barcode: '', name: '', manufacturer: '', category: '', salt: '', packing: '', rackLocation: '', gstRate: 12, batchNo: '', expiry: '', qty: 0, pRate: 0, mrp: 0, sRate: 0, netPrice: 0 });
       setExistingBatches([]);
       fetchProducts();
       quickBarcodeRef.current?.focus();
@@ -631,10 +769,11 @@ export default function ProductsPage() {
           <div className="max-w-7xl mx-auto">
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mb-4">
               <h3 className="text-sm font-bold text-blue-800 mb-2">⚡ Quick Stock Entry - Professional Mode</h3>
-              <div className="grid grid-cols-3 gap-4 text-xs text-gray-700">
-                <div><p className="font-semibold text-blue-700 mb-1">Barcode Scan:</p><ul className="ml-4"><li>✓ Auto-fills Product, Company</li><li>✓ Shows rack location</li></ul></div>
-                <div><p className="font-semibold text-purple-700 mb-1">Manual Entry:</p><ul className="ml-4"><li>• Batch No</li><li>• Expiry & Quantity</li></ul></div>
-                <div><p className="font-semibold text-green-700 mb-1">📍 Rack Location:</p><ul className="ml-4"><li>• Enter: A-1, B-2</li><li>• Find medicine fast</li></ul></div>
+              <div className="grid grid-cols-4 gap-4 text-xs text-gray-700">
+                <div><p className="font-semibold text-blue-700 mb-1">🔍 Smart Search:</p><ul className="ml-4"><li>✓ Type product name</li><li>✓ See suggestions</li><li>✓ Auto-fill rates</li></ul></div>
+                <div><p className="font-semibold text-yellow-700 mb-1">📷 Barcode Scan:</p><ul className="ml-4"><li>✓ Scan barcode</li><li>✓ Auto-fill all</li></ul></div>
+                <div><p className="font-semibold text-purple-700 mb-1">📦 Just Enter:</p><ul className="ml-4"><li>• Batch No</li><li>• Expiry & Qty</li></ul></div>
+                <div><p className="font-semibold text-green-700 mb-1">💰 Rates:</p><ul className="ml-4"><li>✓ From last batch</li><li>✓ Or enter new</li></ul></div>
               </div>
             </div>
 
@@ -646,10 +785,57 @@ export default function ProductsPage() {
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleQuickBarcodeScan(); }}}
                     className="h-9 text-sm font-mono bg-yellow-50 border-2" placeholder="Scan..." autoFocus />
                 </div>
-                <div className="col-span-3">
-                  <label className="text-[10px] text-gray-500 uppercase font-bold">Product Name *</label>
-                  <Input ref={quickNameRef} value={quickForm.name} onChange={e => setQuickForm({...quickForm, name: e.target.value})}
-                    onKeyDown={e => handleQuickKeyDown(e, quickMfgRef)} className="h-9 text-sm font-semibold" placeholder="Paracetamol 500mg" />
+                {/* ✅ UPDATED: Product Name with Dropdown Suggestions */}
+                <div className="col-span-3 relative">
+                  <label className="text-[10px] text-gray-500 uppercase font-bold">Product Name * <span className="text-blue-500">(Type to search)</span></label>
+                  <Input 
+                    ref={quickNameRef} 
+                    value={quickForm.name} 
+                    onChange={e => handleQuickNameChange(e.target.value)}
+                    onKeyDown={handleNameKeyDown}
+                    onBlur={() => setTimeout(() => setShowProductSuggestions(false), 200)}
+                    className="h-9 text-sm font-semibold" 
+                    placeholder="Type to search..." 
+                    autoComplete="off"
+                  />
+                  {/* Product Suggestions Dropdown */}
+                  {showProductSuggestions && productSuggestions.length > 0 && (
+                    <div className="absolute z-50 top-full left-0 right-0 bg-white border-2 border-blue-400 rounded-lg shadow-2xl mt-1 max-h-72 overflow-auto">
+                      <div className="bg-blue-50 px-3 py-1.5 border-b text-[10px] text-blue-600 font-semibold">
+                        🔍 {productSuggestions.length} products found - Press Enter or Click to select
+                      </div>
+                      {productSuggestions.map((p, idx) => (
+                        <div 
+                          key={p.id}
+                          onClick={() => handleSelectProductSuggestion(p)}
+                          className={`px-3 py-2 cursor-pointer border-b last:border-b-0 transition-colors ${
+                            idx === selectedSuggestionIndex ? 'bg-blue-100 border-l-4 border-l-blue-500' : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-semibold text-sm text-gray-800">{p.name}</div>
+                              <div className="text-[10px] text-gray-500">{p.saltComposition || ''}</div>
+                            </div>
+                            <div className="text-right">
+                              {p.batches?.[p.batches.length - 1] && (
+                                <div className="text-xs font-bold text-emerald-600">
+                                  ₹{Number(p.batches[p.batches.length - 1]?.saleRate).toFixed(2)}
+                                </div>
+                              )}
+                              <div className={`text-[10px] font-semibold ${p.totalStock > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                Stock: {p.totalStock}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-gray-400 flex gap-3 mt-0.5">
+                            <span>🏭 {p.manufacturer?.name}</span>
+                            {p.rackLocation && <span className="text-purple-600">📍 {p.rackLocation}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="col-span-2">
                   <label className="text-[10px] text-gray-500 uppercase font-bold">Manufacturer *</label>
@@ -699,7 +885,7 @@ export default function ProductsPage() {
                   <Input ref={quickExpiryRef} value={quickForm.expiry} onChange={e => setQuickForm({...quickForm, expiry: formatExpiryOnType(e.target.value, quickForm.expiry)})}
                     onKeyDown={e => handleQuickKeyDown(e, quickQtyRef)} className="h-9 text-sm bg-red-50 border-2 text-center font-semibold" placeholder="MM/YY" maxLength={5} />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <label className="text-[10px] text-gray-500 uppercase font-bold text-blue-600">Qty *</label>
                   <Input ref={quickQtyRef} type="number" value={quickForm.qty || ''} onChange={e => setQuickForm({...quickForm, qty: Number(e.target.value)})}
                     onKeyDown={e => handleQuickKeyDown(e, quickPRateRef)} className="h-9 text-sm font-bold text-center bg-blue-50 border-2" />
@@ -714,14 +900,22 @@ export default function ProductsPage() {
                   <Input ref={quickMrpRef} type="number" value={quickForm.mrp || ''} onChange={e => setQuickForm({...quickForm, mrp: Number(e.target.value)})}
                     onKeyDown={e => handleQuickKeyDown(e, quickSRateRef)} onBlur={autoCalculateSaleRate} className="h-9 text-sm font-semibold" />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <label className="text-[10px] text-gray-500 uppercase font-bold">S.Rate *</label>
                   <Input ref={quickSRateRef} type="number" value={quickForm.sRate || ''} onChange={e => setQuickForm({...quickForm, sRate: Number(e.target.value)})}
-                    onKeyDown={e => handleQuickKeyDown(e, null)} onBlur={autoCalculatePurchaseRate} className="h-9 text-sm font-semibold" />
+                    onKeyDown={e => handleQuickKeyDown(e, quickNetPriceRef)} onBlur={() => { autoCalculatePurchaseRate(); autoCalculateNetPrice(); }} className="h-9 text-sm font-semibold" />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] text-gray-500 uppercase font-bold text-emerald-600">💰 Net Price</label>
+                  <Input ref={quickNetPriceRef} type="number" step="0.01" value={quickForm.netPrice || ''} 
+                    onChange={e => setQuickForm({...quickForm, netPrice: Number(e.target.value)})}
+                    onKeyDown={e => handleQuickKeyDown(e, null)} 
+                    className="h-9 text-sm font-bold bg-emerald-50 border-2 border-emerald-300" 
+                    placeholder="Auto" />
                 </div>
               </div>
               <div className="flex justify-end gap-2 mt-4 pt-3 border-t">
-                <Button variant="outline" size="sm" onClick={() => { setQuickForm({ barcode: '', name: '', manufacturer: '', category: '', salt: '', packing: '', rackLocation: '', gstRate: 12, batchNo: '', expiry: '', qty: 0, pRate: 0, mrp: 0, sRate: 0 }); setExistingBatches([]); quickBarcodeRef.current?.focus(); }}>Clear</Button>
+                <Button variant="outline" size="sm" onClick={() => { setQuickForm({ barcode: '', name: '', manufacturer: '', category: '', salt: '', packing: '', rackLocation: '', gstRate: 12, batchNo: '', expiry: '', qty: 0, pRate: 0, mrp: 0, sRate: 0, netPrice: 0 }); setExistingBatches([]); setShowProductSuggestions(false); quickBarcodeRef.current?.focus(); }}>Clear</Button>
                 <Button size="sm" onClick={handleQuickAdd} className="bg-emerald-600 hover:bg-emerald-700 px-8 font-semibold">✓ Add Stock</Button>
               </div>
             </div>
@@ -732,7 +926,7 @@ export default function ProductsPage() {
                 <div className="overflow-auto max-h-60">
                   <table className="w-full text-xs">
                     <thead className="bg-gray-100 sticky top-0">
-                      <tr><th className="py-2 px-2 text-left">Time</th><th className="py-2 px-2 text-left">Product</th><th className="py-2 px-2 text-left">Company</th><th className="py-2 px-2 text-center">Batch</th><th className="py-2 px-2 text-center">Expiry</th><th className="py-2 px-2 text-right">Qty</th><th className="py-2 px-2 text-right">MRP</th></tr>
+                      <tr><th className="py-2 px-2 text-left">Time</th><th className="py-2 px-2 text-left">Product</th><th className="py-2 px-2 text-left">Company</th><th className="py-2 px-2 text-center">Batch</th><th className="py-2 px-2 text-center">Expiry</th><th className="py-2 px-2 text-right">Qty</th><th className="py-2 px-2 text-right">MRP</th><th className="py-2 px-2 text-right">Net</th></tr>
                     </thead>
                     <tbody>
                       {quickProducts.map(p => (
@@ -744,6 +938,7 @@ export default function ProductsPage() {
                           <td className="py-1.5 px-2 text-center">{p.expiry}</td>
                           <td className="py-1.5 px-2 text-right font-bold text-blue-600">{p.qty}</td>
                           <td className="py-1.5 px-2 text-right">₹{p.mrp}</td>
+                          <td className="py-1.5 px-2 text-right font-bold text-emerald-600">₹{p.netPrice || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -791,7 +986,11 @@ export default function ProductsPage() {
                     <td className="py-1.5 px-2 text-center"><span className="bg-blue-50 text-blue-700 px-1 py-0.5 rounded text-[10px]">{p.gstRate || 12}%</span></td>
                     <td className={`py-1.5 px-2 text-right font-semibold ${p.totalStock === 0 ? 'text-red-600' : p.totalStock < 50 ? 'text-orange-600' : 'text-green-600'}`}>{p.totalStock}</td>
                     <td className="py-1.5 px-2 text-right">₹{(p.avgRate || 0).toFixed(2)}</td>
-                    <td className="py-1.5 px-2 text-right"><span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">₹{calculateNetPrice(p.avgRate || 0, p.gstRate || 12).toFixed(2)}</span></td>
+                    <td className="py-1.5 px-2 text-right">
+                      <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
+                        ₹{p.batches?.[0]?.netPrice ? Number(p.batches[0].netPrice).toFixed(2) : calculateNetPrice(p.avgRate || 0, p.gstRate || 12).toFixed(2)}
+                      </span>
+                    </td>
                     <td className="py-1.5 px-2 text-center">
                       <button onClick={() => handleViewProduct(p)} className="text-blue-600 hover:text-blue-800 mx-1">👁️</button>
                       <button onClick={() => handleEditProduct(p)} className="text-gray-600 hover:text-gray-800 mx-1">✏️</button>
@@ -858,7 +1057,7 @@ export default function ProductsPage() {
           <DialogHeader className="border-b pb-3"><DialogTitle className="text-sm font-bold">Previous Batches - Select or Enter New</DialogTitle></DialogHeader>
           <div className="mt-4">
             <table className="w-full text-xs border rounded">
-              <thead className="bg-gray-100"><tr><th className="p-2 text-left">Batch</th><th className="p-2 text-left">Expiry</th><th className="p-2 text-right">Stock</th><th className="p-2 text-right">MRP</th><th className="p-2"></th></tr></thead>
+              <thead className="bg-gray-100"><tr><th className="p-2 text-left">Batch</th><th className="p-2 text-left">Expiry</th><th className="p-2 text-right">Stock</th><th className="p-2 text-right">MRP</th><th className="p-2 text-right">Net</th><th className="p-2"></th></tr></thead>
               <tbody>
                 {existingBatches.map(batch => (
                   <tr key={batch.id} className="border-t hover:bg-gray-50">
@@ -866,6 +1065,7 @@ export default function ProductsPage() {
                     <td className="p-2">{formatExpiryDisplay(batch.expiryDate)}</td>
                     <td className="p-2 text-right">{batch.currentStock}</td>
                     <td className="p-2 text-right">₹{Number(batch.mrp)}</td>
+                    <td className="p-2 text-right font-bold text-emerald-600">₹{batch.netPrice ? Number(batch.netPrice).toFixed(2) : '-'}</td>
                     <td className="p-2"><Button size="sm" className="h-6 text-xs" onClick={() => handleSelectExistingBatch(batch)}>Use</Button></td>
                   </tr>
                 ))}
@@ -878,7 +1078,7 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Product Modal - WITH BATCH SECTION IN EDIT MODE */}
+      {/* Product Modal */}
       <Dialog open={showProductModal} onOpenChange={(open) => { setShowProductModal(open); if (!open) { setShowInlineMfgForm(false); setShowInlineCatForm(false); } }}>
         <DialogContent className="bg-white max-w-2xl p-0 gap-0 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="bg-blue-600 text-white px-4 py-3 sticky top-0 z-10">
@@ -948,7 +1148,7 @@ export default function ProductsPage() {
                   <Button size="sm" className="h-6 text-xs bg-emerald-600" onClick={openAddBatchModal}>+ Add Batch</Button>
                 </div>
                 <table className="w-full text-xs border rounded">
-                  <thead className="bg-gray-50"><tr><th className="py-1.5 px-2 text-left border">Batch</th><th className="py-1.5 px-2 text-left border">Expiry</th><th className="py-1.5 px-2 text-right border">Stock</th><th className="py-1.5 px-2 text-right border">MRP</th><th className="py-1.5 px-2 text-right border">S.Rate</th><th className="py-1.5 px-2 text-center border">Actions</th></tr></thead>
+                  <thead className="bg-gray-50"><tr><th className="py-1.5 px-2 text-left border">Batch</th><th className="py-1.5 px-2 text-left border">Expiry</th><th className="py-1.5 px-2 text-right border">Stock</th><th className="py-1.5 px-2 text-right border">MRP</th><th className="py-1.5 px-2 text-right border">S.Rate</th><th className="py-1.5 px-2 text-right border">Net</th><th className="py-1.5 px-2 text-center border">Actions</th></tr></thead>
                   <tbody>
                     {productBatches.map(b => (
                       <tr key={b.id} className="border-t">
@@ -957,6 +1157,7 @@ export default function ProductsPage() {
                         <td className="py-1 px-2 border text-right font-semibold">{b.currentStock}</td>
                         <td className="py-1 px-2 border text-right">₹{Number(b.mrp).toFixed(2)}</td>
                         <td className="py-1 px-2 border text-right">₹{Number(b.saleRate).toFixed(2)}</td>
+                        <td className="py-1 px-2 border text-right font-bold text-emerald-600">₹{b.netPrice ? Number(b.netPrice).toFixed(2) : '-'}</td>
                         <td className="py-1 px-2 border text-center">
                           <button onClick={() => handleEditBatch(b)} className="text-blue-600 mx-1">✏️</button>
                           <button onClick={() => handleDeleteBatch(b.id)} className="text-red-400 mx-1">🗑️</button>
@@ -981,11 +1182,12 @@ export default function ProductsPage() {
                       <div><label className="text-[10px] text-gray-500 uppercase">Batch *</label><Input value={stockForm.batchNo} onChange={e => setStockForm({...stockForm, batchNo: e.target.value.toUpperCase()})} className="h-8 text-xs" /></div>
                       <div><label className="text-[10px] text-gray-500 uppercase">Expiry *</label><Input value={stockForm.expiryDate} onChange={e => setStockForm({...stockForm, expiryDate: formatExpiryOnType(e.target.value, stockForm.expiryDate)})} placeholder="MM/YY" maxLength={5} className="h-8 text-xs text-center" /></div>
                     </div>
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-5 gap-3">
                       <div><label className="text-[10px] text-gray-500 uppercase">Qty *</label><Input type="number" value={stockForm.quantity || ''} onChange={e => setStockForm({...stockForm, quantity: Number(e.target.value)})} className="h-8 text-xs" /></div>
                       <div><label className="text-[10px] text-gray-500 uppercase">P.Rate</label><Input type="number" value={stockForm.purchaseRate || ''} onChange={e => setStockForm({...stockForm, purchaseRate: Number(e.target.value)})} className="h-8 text-xs" /></div>
                       <div><label className="text-[10px] text-gray-500 uppercase">MRP *</label><Input type="number" value={stockForm.mrp || ''} onChange={e => setStockForm({...stockForm, mrp: Number(e.target.value)})} className="h-8 text-xs" /></div>
                       <div><label className="text-[10px] text-gray-500 uppercase">S.Rate *</label><Input type="number" value={stockForm.saleRate || ''} onChange={e => setStockForm({...stockForm, saleRate: Number(e.target.value)})} className="h-8 text-xs" /></div>
+                      <div><label className="text-[10px] text-gray-500 uppercase text-emerald-600">Net Price</label><Input type="number" step="0.01" value={stockForm.netPrice || ''} onChange={e => setStockForm({...stockForm, netPrice: Number(e.target.value)})} className="h-8 text-xs bg-emerald-50" placeholder="Auto" /></div>
                     </div>
                   </div>
                 )}
@@ -1016,9 +1218,9 @@ export default function ProductsPage() {
             </div>
             <p className="text-xs font-semibold text-gray-600 mb-2">Batches:</p>
             <table className="w-full text-xs border">
-              <thead className="bg-gray-50"><tr><th className="py-2 px-2 text-left border">Batch</th><th className="py-2 px-2 text-left border">Expiry</th><th className="py-2 px-2 text-right border">Stock</th><th className="py-2 px-2 text-right border">MRP</th><th className="py-2 px-2 text-right border">S.Rate</th><th className="py-2 px-2 text-center border">Actions</th></tr></thead>
+              <thead className="bg-gray-50"><tr><th className="py-2 px-2 text-left border">Batch</th><th className="py-2 px-2 text-left border">Expiry</th><th className="py-2 px-2 text-right border">Stock</th><th className="py-2 px-2 text-right border">MRP</th><th className="py-2 px-2 text-right border">S.Rate</th><th className="py-2 px-2 text-right border">Net</th><th className="py-2 px-2 text-center border">Actions</th></tr></thead>
               <tbody>
-                {selectedProduct?.batches?.length === 0 ? <tr><td colSpan={6} className="text-center py-4 text-gray-400">No batches</td></tr> :
+                {selectedProduct?.batches?.length === 0 ? <tr><td colSpan={7} className="text-center py-4 text-gray-400">No batches</td></tr> :
                  selectedProduct?.batches?.map((b: any) => (
                   <tr key={b.id} className="border-t">
                     <td className="py-1.5 px-2 border">{b.batchNo}</td>
@@ -1026,6 +1228,7 @@ export default function ProductsPage() {
                     <td className="py-1.5 px-2 text-right border font-semibold">{b.currentStock}</td>
                     <td className="py-1.5 px-2 text-right border">₹{Number(b.mrp).toFixed(2)}</td>
                     <td className="py-1.5 px-2 text-right border">₹{Number(b.saleRate).toFixed(2)}</td>
+                    <td className="py-1.5 px-2 text-right border font-bold text-emerald-600">₹{b.netPrice ? Number(b.netPrice).toFixed(2) : '-'}</td>
                     <td className="py-1.5 px-2 text-center border">
                       <button onClick={() => handleEditBatch(b)} className="text-blue-600 mx-1">✏️</button>
                       <button onClick={() => handleDeleteBatch(b.id)} className="text-red-400 mx-1">🗑️</button>
@@ -1079,11 +1282,12 @@ export default function ProductsPage() {
               <div><label className="text-[10px] text-gray-500 uppercase">Batch No *</label><Input value={batchForm.batchNo} onChange={e => setBatchForm({...batchForm, batchNo: e.target.value.toUpperCase()})} className="h-8 text-xs" /></div>
               <div><label className="text-[10px] text-gray-500 uppercase">Expiry *</label><Input value={batchForm.expiryDate} onChange={e => setBatchForm({...batchForm, expiryDate: formatExpiryOnType(e.target.value, batchForm.expiryDate)})} placeholder="MM/YY" maxLength={5} className="h-8 text-xs text-center" /></div>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-5 gap-3">
               <div><label className="text-[10px] text-gray-500 uppercase">Qty *</label><Input type="number" value={batchForm.quantity || ''} onChange={e => setBatchForm({...batchForm, quantity: Number(e.target.value)})} className="h-8 text-xs" /></div>
               <div><label className="text-[10px] text-gray-500 uppercase">P.Rate</label><Input type="number" value={batchForm.purchaseRate || ''} onChange={e => setBatchForm({...batchForm, purchaseRate: Number(e.target.value)})} className="h-8 text-xs" /></div>
               <div><label className="text-[10px] text-gray-500 uppercase">MRP *</label><Input type="number" value={batchForm.mrp || ''} onChange={e => setBatchForm({...batchForm, mrp: Number(e.target.value)})} className="h-8 text-xs" /></div>
               <div><label className="text-[10px] text-gray-500 uppercase">S.Rate *</label><Input type="number" value={batchForm.saleRate || ''} onChange={e => setBatchForm({...batchForm, saleRate: Number(e.target.value)})} className="h-8 text-xs" /></div>
+              <div><label className="text-[10px] text-gray-500 uppercase text-emerald-600">Net</label><Input type="number" step="0.01" value={batchForm.netPrice || ''} onChange={e => setBatchForm({...batchForm, netPrice: Number(e.target.value)})} className="h-8 text-xs bg-emerald-50" placeholder="Auto" /></div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={() => { setShowBatchModal(false); setEditingBatch(null); }}>Cancel</Button>
@@ -1093,7 +1297,7 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Import Modal - PASTE FROM EXCEL */}
+      {/* Import Modal */}
       <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
         <DialogContent className="bg-white max-w-3xl p-0 gap-0">
           <DialogHeader className="bg-blue-600 text-white px-4 py-3"><DialogTitle className="text-sm font-semibold">📋 Paste from Excel</DialogTitle></DialogHeader>
@@ -1101,9 +1305,10 @@ export default function ProductsPage() {
             <div className="bg-gray-50 p-3 rounded text-xs">
               <p className="font-semibold mb-2">Expected Columns (Tab-separated from Excel):</p>
               <code className="text-[10px] text-gray-600 block bg-white p-2 rounded border">
-                Name | Salt | Manufacturer | Category | Packing | Rack | GST | HSN | BatchNo | Expiry | Qty | PRate | MRP | SRate
+                Name | Salt | Manufacturer | Category | Packing | Rack | GST | HSN | BatchNo | Expiry | Qty | PRate | MRP | SRate | <span className="text-emerald-600 font-bold">NetPrice</span>
               </code>
               <p className="mt-2 text-gray-500">Copy rows from Excel and paste below. New manufacturers/categories will be auto-created.</p>
+              <p className="mt-1 text-emerald-600 font-semibold">💡 NetPrice is optional - leave blank to auto-calculate from SRate + GST</p>
             </div>
             <textarea 
               value={excelData} 

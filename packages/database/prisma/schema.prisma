@@ -57,6 +57,7 @@ model ProductBatch {
   mrp           Float
   saleRate      Float
   purchaseRate  Float
+  netPrice      Float?
   currentStock  Int           @default(0)
   isActive      Boolean       @default(true)
   createdAt     DateTime      @default(now())
