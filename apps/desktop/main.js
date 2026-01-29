@@ -16,7 +16,7 @@ const getWebPath = () => {
 
 const getDatabasePath = () => {
   if (isDev) {
-    return path.join(__dirname, '..', '..', 'packages', 'data', 'pharmastream.db');
+    return path.join(__dirname, 'data', 'pharmastream.db');
   }
   
   const userDataPath = app.getPath('userData');
@@ -30,12 +30,23 @@ const getDatabasePath = () => {
   if (!fs.existsSync(dbPath)) {
     const defaultDbPath = path.join(process.resourcesPath, 'data', 'pharmastream.db');
     if (fs.existsSync(defaultDbPath)) {
-      console.log('Copying default database...');
+      console.log('Copying default database from:', defaultDbPath);
+      console.log('To:', dbPath);
       fs.copyFileSync(defaultDbPath, dbPath);
+      console.log('Database copied successfully');
+    } else {
+      console.error('Default database not found at:', defaultDbPath);
     }
   }
   
   return dbPath;
+};
+
+// Convert Windows backslashes to forward slashes for SQLite URL
+const toSqliteUrl = (filePath) => {
+  // Replace backslashes with forward slashes for SQLite
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  return `file:${normalizedPath}`;
 };
 
 function waitForServer(port, timeout = 30000) {
@@ -72,13 +83,17 @@ async function startServer() {
   const webPath = getWebPath();
   const PORT = 3001;
   
+  // Convert to SQLite URL with forward slashes
+  const databaseUrl = toSqliteUrl(dbPath);
+  
   process.env.PORT = String(PORT);
-  process.env.DATABASE_URL = `file:${dbPath}`;
+  process.env.DATABASE_URL = databaseUrl;
   process.env.NODE_ENV = isDev ? 'development' : 'production';
   process.env.WEB_PATH = webPath;
   
   console.log('=== PharmaStream Server Startup ===');
   console.log('Database path:', dbPath);
+  console.log('DATABASE_URL:', databaseUrl);
   console.log('Web path:', webPath);
   console.log('Database exists:', fs.existsSync(dbPath));
   console.log('Web exists:', fs.existsSync(webPath));
@@ -104,29 +119,44 @@ async function startServer() {
     
     console.log('Server path:', serverDistPath);
     console.log('Server exists:', fs.existsSync(serverDistPath));
+    console.log('Node modules path:', nodeModulesPath);
+    console.log('Node modules exists:', fs.existsSync(nodeModulesPath));
+    
+    // Check for Prisma client
+    const prismaClientPath = path.join(nodeModulesPath, '@prisma', 'client');
+    const dotPrismaPath = path.join(nodeModulesPath, '.prisma', 'client');
+    console.log('Prisma client exists:', fs.existsSync(prismaClientPath));
+    console.log('.prisma client exists:', fs.existsSync(dotPrismaPath));
     
     if (!fs.existsSync(serverDistPath)) {
       throw new Error(`Server not found: ${serverDistPath}`);
     }
     
+    // Set module paths for Prisma
     process.env.NODE_PATH = nodeModulesPath;
     require('module').Module._initPaths();
     
     console.log('Loading server module...');
-    const serverModule = require(serverDistPath);
     
-    if (typeof serverModule.startServer === 'function') {
-      console.log('Calling startServer()...');
-      await serverModule.startServer(PORT);
-    } else if (serverModule.default && typeof serverModule.default.listen === 'function') {
-      await new Promise((resolve) => {
-        serverModule.default.listen(PORT, () => {
-          console.log(`Express app listening on port ${PORT}`);
-          resolve();
+    try {
+      const serverModule = require(serverDistPath);
+      
+      if (typeof serverModule.startServer === 'function') {
+        console.log('Calling startServer()...');
+        await serverModule.startServer(PORT);
+      } else if (serverModule.default && typeof serverModule.default.listen === 'function') {
+        await new Promise((resolve) => {
+          serverModule.default.listen(PORT, () => {
+            console.log(`Express app listening on port ${PORT}`);
+            resolve();
+          });
         });
-      });
-    } else {
-      throw new Error('Server module does not export startServer()');
+      } else {
+        throw new Error('Server module does not export startServer()');
+      }
+    } catch (err) {
+      console.error('Server module load error:', err);
+      throw err;
     }
   }
   
@@ -190,7 +220,7 @@ app.whenReady().then(async () => {
     console.error('Startup failed:', error);
     
     dialog.showErrorBox('Startup Error', 
-      `Error: ${error.message}\n\nResources: ${process.resourcesPath}\nDatabase: ${getDatabasePath()}`
+      `Error: ${error.message}\n\nResources: ${process.resourcesPath}\nDatabase: ${getDatabasePath()}\nStack: ${error.stack}`
     );
     app.quit();
   }

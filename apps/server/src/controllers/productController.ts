@@ -89,8 +89,8 @@ export const getProducts = async (req: Request, res: Response) => {
 
     res.json({ products: filtered, total, page, limit });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to fetch products' });
+    console.error("getProducts error:", error);
+    res.status(500).json({ error: 'Failed to fetch products', details: error instanceof Error ? error.message : String(error) });
   }
 };
 
@@ -192,7 +192,7 @@ export const createProduct = async (req: Request, res: Response) => {
     });
     res.status(201).json(product);
   } catch (error) {
-    console.error(error);
+    console.error("getProducts error:", error);
     res.status(500).json({ error: 'Failed to create product' });
   }
 };
@@ -292,7 +292,7 @@ export const addBatch = async (req: Request, res: Response) => {
     });
     res.status(201).json(batch);
   } catch (error) {
-    console.error(error);
+    console.error("getProducts error:", error);
     res.status(500).json({ error: 'Failed to add batch' });
   }
 };

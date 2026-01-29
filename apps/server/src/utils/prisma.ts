@@ -1,35 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 
-// Lazy initialization - Prisma will use DATABASE_URL when first query is made
-let prisma: PrismaClient | null = null;
+console.log('=== Prisma Module Loading ===');
+console.log('DATABASE_URL at load time:', process.env.DATABASE_URL);
 
-function getPrismaClient(): PrismaClient {
-  if (!prisma) {
-    console.log('=== Prisma Initialization ===');
-    console.log('DATABASE_URL:', process.env.DATABASE_URL);
-    
-    prisma = new PrismaClient({
-      log: ['error', 'warn'],
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL
-        }
-      }
-    });
-  }
-  return prisma;
-}
-
-// Export a proxy that lazily initializes Prisma on first access
-const prismaProxy = new Proxy({} as PrismaClient, {
-  get(_target, prop: string | symbol) {
-    const client = getPrismaClient();
-    const value = (client as any)[prop];
-    if (typeof value === 'function') {
-      return value.bind(client);
-    }
-    return value;
-  }
+const prisma = new PrismaClient({
+  log: ['query', 'error', 'warn'],
 });
 
-export default prismaProxy;
+// Test connection on first use
+prisma.$connect()
+  .then(() => console.log('✅ Prisma connected to database'))
+  .catch((err: Error) => console.error('❌ Prisma connection failed:', err.message));
+
+export default prisma;
