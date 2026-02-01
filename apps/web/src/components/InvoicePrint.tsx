@@ -54,216 +54,22 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
   const netPayable = grandTotal + previousDue - advanceUsed;
   const balanceDue = netPayable - paidAmount;
 
-  // Single Invoice Copy Component
-  const InvoiceCopy = ({ copyType }: { copyType: 'ORIGINAL' | 'DUPLICATE' }) => (
-    <div style={{
-      width: '48%',
-      border: '1px solid #000',
-      padding: '8px',
-      fontSize: '9px',
-      fontFamily: 'Arial, sans-serif',
-      boxSizing: 'border-box' as const,
-      backgroundColor: '#fff',
-    }}>
-      {/* Copy Type Badge */}
-      <div style={{
-        textAlign: 'center',
-        backgroundColor: '#000',
-        color: '#fff',
-        padding: '2px 8px',
-        fontSize: '8px',
-        fontWeight: 'bold',
-        marginBottom: '5px',
-      }}>
-        {copyType} {copyType === 'ORIGINAL' ? '(For Buyer)' : '(For Seller)'}
-      </div>
-
-      {/* Header */}
-      <div style={{ textAlign: 'center', borderBottom: '1px solid #000', paddingBottom: '5px', marginBottom: '5px' }}>
-        <div style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase' }}>{settings.companyName}</div>
-        <div style={{ fontSize: '8px' }}>{settings.address}, {settings.city} {settings.pincode}</div>
-        <div style={{ fontSize: '8px' }}>Ph: {settings.phone} {settings.email && `| ${settings.email}`}</div>
-        <div style={{ fontSize: '8px', fontWeight: 'bold' }}>GSTIN: {settings.gstin}</div>
-        <div style={{ fontSize: '7px' }}>DL: {settings.dlNumber20b} | {settings.dlNumber21b}</div>
-      </div>
-
-      {/* Invoice Title */}
-      <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px', margin: '3px 0' }}>
-        TAX INVOICE
-      </div>
-
-      {/* Invoice Info Row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #000', paddingBottom: '4px', marginBottom: '4px' }}>
-        <div style={{ width: '60%' }}>
-          <div style={{ fontWeight: 'bold', fontSize: '8px' }}>Bill To:</div>
-          <div style={{ fontWeight: 'bold', fontSize: '10px' }}>{customer.name}</div>
-          {customer.address && <div style={{ fontSize: '8px' }}>{customer.address}</div>}
-          {customer.city && <div style={{ fontSize: '8px' }}>{customer.city}{customer.state && `, ${customer.state}`}</div>}
-          {customer.mobile && <div style={{ fontSize: '8px' }}>Mob: {customer.mobile}</div>}
-          {customer.gstin && <div style={{ fontSize: '8px' }}>GSTIN: {customer.gstin}</div>}
-          {customer.dlNumber && <div style={{ fontSize: '8px', fontWeight: 'bold' }}>DL No: {customer.dlNumber}</div>}
-        </div>
-        <div style={{ width: '38%', textAlign: 'right', fontSize: '8px' }}>
-          <div><b>Inv No:</b> {invoice.invoiceNo}</div>
-          <div><b>Date:</b> {new Date(invoice.invoiceDate || Date.now()).toLocaleDateString('en-IN')}</div>
-          <div><b>Time:</b> {new Date(invoice.invoiceDate || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
-          <div style={{ marginTop: '2px', padding: '2px 4px', border: '1px solid #000', display: 'inline-block' }}>
-            {invoice.invoiceType || 'CASH'}
-          </div>
-        </div>
-      </div>
-
-      {/* Items Table */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5px' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f0f0f0' }}>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', width: '14px' }}>#</th>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', textAlign: 'left' }}>Product</th>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', width: '40px' }}>Batch</th>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', width: '28px' }}>Exp</th>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', width: '22px' }}>Qty</th>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', width: '32px', textAlign: 'right' }}>MRP</th>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', width: '32px', textAlign: 'right' }}>Rate</th>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', width: '20px' }}>D%</th>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', width: '20px' }}>G%</th>
-            <th style={{ border: '1px solid #000', padding: '2px', fontSize: '7px', width: '38px', textAlign: 'right' }}>Amt</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, index) => (
-            <tr key={index}>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px', textAlign: 'center' }}>{index + 1}</td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px', textAlign: 'left', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {(item.productName || item.product?.name || '').substring(0, 25)}
-              </td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '6px', textAlign: 'center' }}>{item.batchNo || item.batch?.batchNo}</td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '6px', textAlign: 'center' }}>{item.expiry || formatExpiryDisplay(item.batch?.expiryDate)}</td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px', textAlign: 'center', fontWeight: 'bold' }}>{item.quantity}</td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px', textAlign: 'right' }}>{Number(item.mrp || item.batch?.mrp || item.unitRate).toFixed(0)}</td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px', textAlign: 'right' }}>{Number(item.unitRate).toFixed(2)}</td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '6px', textAlign: 'center' }}>{Number(item.discountPct) > 0 ? Number(item.discountPct) : '-'}</td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '6px', textAlign: 'center' }}>{Number(item.gstPct)}</td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px', textAlign: 'right', fontWeight: 'bold' }}>{Number(item.amount || item.totalAmount).toFixed(2)}</td>
-            </tr>
-          ))}
-          {/* Empty rows to maintain consistent height for small bills */}
-          {items.length < 8 && Array.from({ length: 8 - items.length }).map((_, i) => (
-            <tr key={`empty-${i}`}>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px', height: '12px' }}>&nbsp;</td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px' }}></td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px' }}></td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px' }}></td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px' }}></td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px' }}></td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px' }}></td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px' }}></td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px' }}></td>
-              <td style={{ border: '1px solid #000', padding: '1px 2px', fontSize: '7px' }}></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Summary Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-        {/* Amount in Words */}
-        <div style={{ width: '55%', border: '1px solid #000', padding: '4px', fontSize: '7px' }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>Amount in Words:</div>
-          <div style={{ fontSize: '8px' }}>{numberToWords(Math.round(grandTotal))} Rupees Only</div>
-          <div style={{ marginTop: '3px', fontSize: '6px', fontStyle: 'italic' }}>* Prices inclusive of GST</div>
-        </div>
-
-        {/* Totals */}
-        <div style={{ width: '42%', fontSize: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0' }}>
-            <span>Taxable Amt:</span>
-            <span>{totalTaxableAmount.toFixed(2)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0' }}>
-            <span>CGST:</span>
-            <span>{cgstAmount.toFixed(2)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0' }}>
-            <span>SGST:</span>
-            <span>{sgstAmount.toFixed(2)}</span>
-          </div>
-          {totalDiscount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0' }}>
-              <span>Discount:</span>
-              <span>-{totalDiscount.toFixed(2)}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontWeight: 'bold', borderTop: '1px solid #000', marginTop: '2px', fontSize: '10px' }}>
-            <span>TOTAL:</span>
-            <span>₹{grandTotal.toFixed(2)}</span>
-          </div>
-          
-          {previousDue > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0', fontSize: '7px' }}>
-              <span>+ Prev Due:</span>
-              <span>{previousDue.toFixed(2)}</span>
-            </div>
-          )}
-          {advanceUsed > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0', fontSize: '7px' }}>
-              <span>- Advance:</span>
-              <span>{advanceUsed.toFixed(2)}</span>
-            </div>
-          )}
-          {paidAmount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0', fontSize: '7px' }}>
-              <span>Received ({paymentMode}):</span>
-              <span>{paidAmount.toFixed(2)}</span>
-            </div>
-          )}
-          
-          {/* Final Status */}
-          {(dueAmount > 0 || balanceDue > 0) ? (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 4px', fontWeight: 'bold', backgroundColor: '#f0f0f0', border: '1px solid #000', marginTop: '2px', fontSize: '9px' }}>
-              <span>BALANCE DUE:</span>
-              <span>₹{(dueAmount || balanceDue).toFixed(2)}</span>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 4px', fontWeight: 'bold', backgroundColor: '#e8f5e9', border: '1px solid #000', marginTop: '2px', fontSize: '9px' }}>
-              <span>PAID</span>
-              <span>✓</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #000', paddingTop: '4px', fontSize: '7px' }}>
-        <div style={{ width: '55%' }}>
-          <div style={{ fontWeight: 'bold' }}>Terms:</div>
-          <div>1. Goods once sold will not be taken back</div>
-          <div>2. Subject to local jurisdiction</div>
-        </div>
-        <div style={{ width: '40%', textAlign: 'right' }}>
-          <div style={{ fontSize: '8px', fontWeight: 'bold' }}>For {settings.companyName}</div>
-          <div style={{ marginTop: '18px', borderTop: '1px solid #000', paddingTop: '2px', fontSize: '7px' }}>
-            Authorized Signatory
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div style={{
-      width: '100%',
-      maxWidth: '297mm', // A4 Landscape width
+      width: '200mm',
+      minHeight: '290mm',
       margin: '0 auto',
-      padding: '5mm',
+      padding: '2mm 5mm 2mm 3mm',
       boxSizing: 'border-box' as const,
       backgroundColor: '#fff',
+      fontFamily: 'Arial, sans-serif',
     }}>
-      {/* Print Styles */}
+      {/* Print Styles - Adjusted margins */}
       <style>{`
         @media print {
           @page {
-            size: A4 landscape;
-            margin: 5mm;
+            size: A4 portrait;
+            margin: 2mm 5mm 2mm 3mm;
           }
           body {
             -webkit-print-color-adjust: exact !important;
@@ -272,14 +78,182 @@ export default function InvoicePrint({ invoice, customer, items }: InvoicePrintP
         }
       `}</style>
       
-      {/* Dual Copy Container */}
+      {/* Single Invoice - Full Width */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        gap: '10px',
+        width: '100%',
+        border: '2px solid #000',
+        padding: '10px',
+        fontSize: '14px',
       }}>
-        <InvoiceCopy copyType="ORIGINAL" />
-        <InvoiceCopy copyType="DUPLICATE" />
+        {/* Header */}
+        <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '8px' }}>
+          <div style={{ fontSize: '26px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '2px' }}>{settings.companyName}</div>
+          <div style={{ fontSize: '13px', marginTop: '4px', fontWeight: '500' }}>{settings.address}, {settings.city} - {settings.pincode}</div>
+          <div style={{ fontSize: '13px', fontWeight: '500' }}>Ph: {settings.phone} {settings.email && `| Email: ${settings.email}`}</div>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginTop: '3px' }}>GSTIN: {settings.gstin}</div>
+          <div style={{ fontSize: '12px', fontWeight: '500' }}>DL No: {settings.dlNumber20b} | {settings.dlNumber21b}</div>
+        </div>
+
+        {/* Invoice Title */}
+        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '18px', margin: '5px 0', textDecoration: 'underline' }}>
+          TAX INVOICE
+        </div>
+
+        {/* Invoice Info Row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #000', paddingBottom: '8px', marginBottom: '8px' }}>
+          <div style={{ width: '55%' }}>
+            <div style={{ fontWeight: 'bold', fontSize: '12px', marginBottom: '2px' }}>Bill To:</div>
+            <div style={{ fontWeight: 'bold', fontSize: '17px' }}>{customer.name}</div>
+            {customer.address && <div style={{ fontSize: '13px', fontWeight: '500' }}>{customer.address}</div>}
+            {customer.city && <div style={{ fontSize: '13px', fontWeight: '500' }}>{customer.city}{customer.state && `, ${customer.state}`} {customer.pincode}</div>}
+            {customer.mobile && <div style={{ fontSize: '13px', fontWeight: 'bold' }}>Mobile: {customer.mobile}</div>}
+            {customer.gstin && <div style={{ fontSize: '13px', fontWeight: 'bold' }}>GSTIN: {customer.gstin}</div>}
+            {customer.dlNumber && <div style={{ fontSize: '13px', fontWeight: 'bold' }}>DL No: {customer.dlNumber}</div>}
+          </div>
+          <div style={{ width: '42%', textAlign: 'right', fontSize: '13px' }}>
+            <div style={{ marginBottom: '3px' }}><b>Invoice No:</b> <span style={{ fontSize: '17px', fontWeight: 'bold' }}>{invoice.invoiceNo}</span></div>
+            <div style={{ marginBottom: '3px', fontWeight: 'bold' }}>Date: {new Date(invoice.invoiceDate || Date.now()).toLocaleDateString('en-IN')}</div>
+            <div style={{ marginBottom: '3px', fontWeight: 'bold' }}>Time: {new Date(invoice.invoiceDate || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+            <div style={{ marginTop: '6px', padding: '4px 15px', border: '2px solid #000', display: 'inline-block', fontWeight: 'bold', fontSize: '14px', backgroundColor: '#f5f5f5' }}>
+              {invoice.invoiceType || 'CASH'}
+            </div>
+          </div>
+        </div>
+
+        {/* Items Table - Bigger & Bolder */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', tableLayout: 'fixed' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#e0e0e0' }}>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', width: '22px' }}>#</th>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', textAlign: 'left' }}>Product Name</th>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', width: '65px' }}>Batch</th>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', width: '50px' }}>Expiry</th>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', width: '35px' }}>Qty</th>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', width: '55px', textAlign: 'right' }}>MRP</th>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', width: '55px', textAlign: 'right' }}>Rate</th>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', width: '32px' }}>D%</th>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', width: '32px' }}>GST</th>
+              <th style={{ border: '2px solid #000', padding: '6px 2px', fontSize: '12px', fontWeight: 'bold', width: '70px', textAlign: 'right' }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, index) => (
+              <tr key={index}>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px', textAlign: 'center', fontWeight: 'bold' }}>{index + 1}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 3px', fontSize: '13px', textAlign: 'left', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.productName || item.product?.name || ''}
+                </td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '11px', textAlign: 'center', fontWeight: 'bold' }}>{item.batchNo || item.batch?.batchNo}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '11px', textAlign: 'center', fontWeight: 'bold' }}>{item.expiry || formatExpiryDisplay(item.batch?.expiryDate)}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '14px', textAlign: 'center', fontWeight: 'bold' }}>{item.quantity}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px', textAlign: 'right', fontWeight: 'bold' }}>{Number(item.mrp || item.batch?.mrp || item.unitRate).toFixed(2)}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px', textAlign: 'right', fontWeight: 'bold' }}>{Number(item.unitRate).toFixed(2)}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '11px', textAlign: 'center', fontWeight: 'bold' }}>{Number(item.discountPct) > 0 ? Number(item.discountPct).toFixed(0) : '-'}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '11px', textAlign: 'center', fontWeight: 'bold' }}>{Number(item.gstPct)}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '13px', textAlign: 'right', fontWeight: 'bold' }}>₹{Number(item.amount || item.totalAmount).toFixed(2)}</td>
+              </tr>
+            ))}
+            {/* Empty rows for consistent look */}
+            {items.length < 12 && Array.from({ length: Math.max(0, 12 - items.length) }).map((_, i) => (
+              <tr key={`empty-${i}`}>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px', height: '24px' }}>&nbsp;</td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px' }}></td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px' }}></td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px' }}></td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px' }}></td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px' }}></td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px' }}></td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px' }}></td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px' }}></td>
+                <td style={{ border: '1px solid #000', padding: '5px 2px', fontSize: '12px' }}></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Summary Section */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          {/* Amount in Words */}
+          <div style={{ width: '53%', border: '2px solid #000', padding: '8px', fontSize: '12px' }}>
+            <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '13px' }}>Amount in Words:</div>
+            <div style={{ fontSize: '15px', fontWeight: 'bold' }}>{numberToWords(Math.round(grandTotal))} Rupees Only</div>
+            <div style={{ marginTop: '8px', fontSize: '11px', fontStyle: 'italic', color: '#555' }}>* Prices are inclusive of GST</div>
+          </div>
+
+          {/* Totals */}
+          <div style={{ width: '45%', fontSize: '13px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', borderBottom: '1px solid #ccc', fontWeight: 'bold' }}>
+              <span>Taxable Amount:</span>
+              <span>₹{totalTaxableAmount.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', borderBottom: '1px solid #ccc', fontWeight: 'bold' }}>
+              <span>CGST:</span>
+              <span>₹{cgstAmount.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', borderBottom: '1px solid #ccc', fontWeight: 'bold' }}>
+              <span>SGST:</span>
+              <span>₹{sgstAmount.toFixed(2)}</span>
+            </div>
+            {totalDiscount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', borderBottom: '1px solid #ccc', fontWeight: 'bold' }}>
+                <span>Discount:</span>
+                <span>-₹{totalDiscount.toFixed(2)}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 6px', fontWeight: 'bold', borderTop: '3px solid #000', marginTop: '4px', fontSize: '17px', backgroundColor: '#f5f5f5' }}>
+              <span>GRAND TOTAL:</span>
+              <span>₹{grandTotal.toFixed(2)}</span>
+            </div>
+            
+            {previousDue > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 6px', fontSize: '12px', fontWeight: 'bold' }}>
+                <span>+ Previous Due:</span>
+                <span>₹{previousDue.toFixed(2)}</span>
+              </div>
+            )}
+            {advanceUsed > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 6px', fontSize: '12px', fontWeight: 'bold' }}>
+                <span>- Advance Used:</span>
+                <span>₹{advanceUsed.toFixed(2)}</span>
+              </div>
+            )}
+            {paidAmount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 6px', fontSize: '12px', fontWeight: 'bold' }}>
+                <span>Received ({paymentMode}):</span>
+                <span>₹{paidAmount.toFixed(2)}</span>
+              </div>
+            )}
+            
+            {/* Final Status */}
+            {(dueAmount > 0 || balanceDue > 0) ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', fontWeight: 'bold', backgroundColor: '#fff3cd', border: '3px solid #000', marginTop: '6px', fontSize: '16px' }}>
+                <span>BALANCE DUE:</span>
+                <span>₹{(dueAmount || balanceDue).toFixed(2)}</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', fontWeight: 'bold', backgroundColor: '#d4edda', border: '3px solid #28a745', marginTop: '6px', fontSize: '16px', color: '#155724' }}>
+                <span>FULLY PAID</span>
+                <span>✓</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #000', paddingTop: '8px', fontSize: '11px' }}>
+          <div style={{ width: '55%' }}>
+            <div style={{ fontWeight: 'bold', fontSize: '12px', marginBottom: '4px' }}>Terms & Conditions:</div>
+            <div style={{ fontWeight: '500' }}>1. Goods once sold will not be taken back or exchanged.</div>
+            <div style={{ fontWeight: '500' }}>2. All disputes subject to local jurisdiction only.</div>
+            <div style={{ fontWeight: '500' }}>3. E. & O.E. (Errors and Omissions Excepted)</div>
+          </div>
+          <div style={{ width: '40%', textAlign: 'right' }}>
+            <div style={{ fontSize: '13px', fontWeight: 'bold' }}>For {settings.companyName}</div>
+            <div style={{ marginTop: '30px', borderTop: '1px solid #000', paddingTop: '4px', fontSize: '12px', display: 'inline-block', paddingLeft: '25px', paddingRight: '25px', fontWeight: 'bold' }}>
+              Authorized Signatory
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
