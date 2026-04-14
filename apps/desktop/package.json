@@ -13,6 +13,8 @@
     "start": "electron .",
     "build": "electron-builder",
     "build:win": "electron-builder --win --x64",
+    "build:store": "electron-builder --win appx --x64",
+    "build:both": "electron-builder --win nsis appx --x64",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
   },
@@ -60,8 +62,13 @@
         {
           "target": "nsis",
           "arch": ["x64"]
+        },
+        {
+          "target": "appx",
+          "arch": ["x64"]
         }
-      ]
+      ],
+      "icon": "icons/win/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -69,6 +76,20 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "PharmaStream"
+    },
+    "appx": {
+      "identityName": "PharmaStreamERP",
+      "displayName": "PharmaStream - Pharmacy Management",
+      "publisherDisplayName": "MD Saif Raza",
+      "publisher": "CN=MD Saif Raza",
+      "applicationId": "PharmaStreamERP",
+      "backgroundColor": "#1e40af",
+      "languages": ["en-US", "en-IN"],
+      "showNameOnTiles": true,
+      "setBuildNumber": true
+    },
+    "mac": {
+      "icon": "icons/mac/icon.icns"
     }
   }
 }

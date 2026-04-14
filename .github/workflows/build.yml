@@ -67,15 +67,21 @@ jobs:
             Copy-Item -Path "$dbDotPrisma/*" -Destination "apps/desktop/prisma-build/node_modules/.prisma/client" -Recurse -Force
           }
 
-      - name: Build Electron App
+      - name: Build Electron App (NSIS + AppX)
         run: |
           cd apps/desktop
-          pnpm run build:win
+          pnpm run build:both
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Artifact
+      - name: Upload NSIS Installer
         uses: actions/upload-artifact@v4
         with:
-          name: PharmaStream-Windows
+          name: PharmaStream-Windows-Installer
           path: apps/desktop/dist/*.exe
+
+      - name: Upload Microsoft Store Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: PharmaStream-Windows-Store
+          path: apps/desktop/dist/*.appx
