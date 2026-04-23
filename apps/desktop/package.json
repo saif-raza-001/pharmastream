@@ -79,7 +79,7 @@
     },
     "appx": {
       "identityName": "MdSaifRaza.PharmaStream",
-      "displayName": "PharmaStream - Pharmacy Management",
+      "displayName": "PharmaStream",
       "publisherDisplayName": "Md Saif Raza",
       "publisher": "CN=E62814AA-8BD7-41F8-B526-6DEEC493418C",
       "applicationId": "PharmaStreamERP",
