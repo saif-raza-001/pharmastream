@@ -93,4 +93,27 @@ export const reportsAPI = {
   getGST: (from: string, to: string) => api.get('/reports/gst', { params: { from, to } }),
 };
 
+export const ndpsAPI = {
+  // NDPS Products
+  getNDPSProducts: () => api.get('/ndps/products'),
+  markProductAsNDPS: (data: any) => api.post('/ndps/products/mark', data),
+  unmarkNDPS: (id: string) => api.delete(`/ndps/products/${id}`),
+  
+  // Licenses
+  getLicenses: (search?: string) => api.get('/ndps/licenses', { params: { search } }),
+  createLicense: (data: any) => api.post('/ndps/licenses', data),
+  updateLicense: (id: string, data: any) => api.put(`/ndps/licenses/${id}`, data),
+  deleteLicense: (id: string) => api.delete(`/ndps/licenses/${id}`),
+  
+  // Transactions
+  getTransactions: (params?: any) => api.get('/ndps/transactions', { params }),
+  createTransaction: (data: any) => api.post('/ndps/transactions', data),
+  
+  // Reports
+  getRegister: (from?: string, to?: string) => api.get('/ndps/register', { params: { from, to } }),
+  getStockSummary: () => api.get('/ndps/stock-summary'),
+  getGovernmentReport: (from: string, to: string, type?: string) => 
+    api.get('/ndps/government-report', { params: { from, to, type } }),
+};
+
 export default api;

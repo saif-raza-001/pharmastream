@@ -101,6 +101,60 @@ export const createInvoice = async (req: Request, res: Response) => {
             }
           }
         });
+
+        // ============ AUTO-CREATE NDPS TRANSACTION ============
+        const ndpsProduct = await tx.nDPSProduct.findUnique({
+          where: { productId: item.productId }
+        });
+
+        if (ndpsProduct && ndpsProduct.isActive) {
+          // Get last transaction for opening balance
+          const lastTransaction = await tx.nDPSTransaction.findFirst({
+            where: { ndpsProductId: ndpsProduct.id },
+            orderBy: { transactionDate: 'desc' }
+          });
+
+          const openingBalance = lastTransaction ? lastTransaction.closingBalance : 0;
+          const quantity = item.quantity + (item.freeQuantity || 0);
+          const closingBalance = openingBalance - quantity;
+
+          // Get batch details
+          const batch = await tx.productBatch.findUnique({
+            where: { id: item.batchId }
+          });
+
+          // Try to find customer's NDPS license
+          const customer = await tx.account.findUnique({
+            where: { id: customerId }
+          });
+
+          let ndpsLicenseId = null;
+          if (customer?.dlNumber) {
+            const license = await tx.nDPSLicense.findFirst({
+              where: { licenseNo: customer.dlNumber }
+            });
+            if (license) {
+              ndpsLicenseId = license.id;
+            }
+          }
+
+          // Create NDPS transaction
+          await tx.nDPSTransaction.create({
+            data: {
+              transactionType: 'SALE',
+              ndpsProductId: ndpsProduct.id,
+              ndpsLicenseId: ndpsLicenseId,
+              batchNo: batch?.batchNo || item.batchNo || null,
+              expiryDate: batch?.expiryDate || null,
+              quantity: quantity,
+              unit: 'units',
+              invoiceNo: `INV-${newInvoice.invoiceNo}`,
+              openingBalance: openingBalance,
+              closingBalance: closingBalance,
+              remarks: `Auto-created from Sales Invoice #${newInvoice.invoiceNo}`
+            }
+          });
+        }
       }
 
       await tx.ledgerEntry.create({
@@ -398,11 +452,14 @@ export const deleteInvoice = async (req: Request, res: Response) => {
             }
           }
         });
+
+        // Delete NDPS transactions for this invoice if any
+        await tx.nDPSTransaction.deleteMany({
+          where: { invoiceNo: `INV-${invoice.invoiceNo}` }
+        });
       }
       
       // 2. Calculate balance reversal
-      // Original: balance increased by (grandTotal - advanceUsed - paidAmount)
-      // Now: reverse that change
       const grandTotal = Number(invoice.grandTotal);
       const advanceUsed = Number(invoice.advanceUsed);
       const paidAmount = Number(invoice.paidAmount);
@@ -436,7 +493,7 @@ export const deleteInvoice = async (req: Request, res: Response) => {
     
     res.json({ 
       success: true, 
-      message: `Invoice #${invoice.invoiceNo} deleted successfully. Stock restored.`
+      message: `Invoice #${invoice.invoiceNo} deleted successfully. Stock and NDPS records restored.`
     });
   } catch (error) {
     console.error('Delete invoice error:', error);

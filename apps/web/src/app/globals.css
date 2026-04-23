@@ -123,3 +123,35 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ============ PRINT STYLES - NDPS Reports ============ */
+@media print {
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only print-content and its children */
+  .print-content,
+  .print-content * {
+    visibility: visible;
+  }
+
+  /* Position print-content to fill the page */
+  .print-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 20px;
+  }
+
+  /* Hide sidebar, toaster, header, tabs, buttons */
+  aside,
+  [data-sonner-toaster],
+  header,
+  nav,
+  button {
+    display: none !important;
+  }
+}

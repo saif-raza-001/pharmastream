@@ -13,6 +13,7 @@ import categoryRoutes from './routes/categoryRoutes';
 import settingsRoutes from './routes/settingsRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import reportRoutes from './routes/reportRoutes';
+import ndpsRoutes from './routes/ndpsRoutes';
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/ndps', ndpsRoutes);
 
 // Serve static web files in production (for Electron)
 const webPath = process.env.WEB_PATH;

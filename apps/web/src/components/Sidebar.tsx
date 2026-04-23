@@ -13,6 +13,7 @@ const menuItems = [
   { name: 'Products', href: '/products', icon: '💊' },
   { name: 'Accounts', href: '/accounts', icon: '👥' },
   { name: 'Reports', href: '/reports', icon: '📊' },
+  { name: 'NDPS', href: '/ndps', icon: '🛡️' },
   { name: 'Settings', href: '/settings', icon: '⚙️' },
 ];
 

@@ -41,6 +41,11 @@ export default function BillingPage() {
   const [savedInvoice, setSavedInvoice] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
   const [discount, setDiscount] = useState(0);
+
+  // NDPS Warning System
+  const [ndpsProductIds, setNdpsProductIds] = useState<Set<string>>(new Set());
+  const [showNDPSWarning, setShowNDPSWarning] = useState(false);
+  const [ndpsItemsInCart, setNdpsItemsInCart] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   
   const [editingCell, setEditingCell] = useState<{index: number, field: 'quantity' | 'unitRate' | 'discountPct' | 'gstPct'} | null>(null);
@@ -95,6 +100,17 @@ export default function BillingPage() {
 
   useEffect(() => {
     fetchRecentInvoices();
+  }, []);
+
+  // Fetch NDPS product IDs for sales warning
+  useEffect(() => {
+    fetch('http://localhost:3001/api/ndps/products')
+      .then(res => res.json())
+      .then(data => {
+        const ids = new Set(data.map((np: any) => np.productId));
+        setNdpsProductIds(ids as Set<string>);
+      })
+      .catch(err => console.error('NDPS fetch error:', err));
   }, []);
 
   useEffect(() => {
@@ -338,10 +354,22 @@ export default function BillingPage() {
   const handleInitiateSave = () => {
     if (!customer) { toast.error("Select customer (F3)"); return; }
     if (items.length === 0) { toast.error("Add items (F2)"); return; }
-    
+
+    // Check for NDPS products in cart
+    const ndpsItems = items.filter((item: any) => ndpsProductIds.has(item.productId));
+    if (ndpsItems.length > 0) {
+      setNdpsItemsInCart(ndpsItems);
+      setShowNDPSWarning(true);
+      return;
+    }
+
+    proceedToPayment();
+  };
+
+  const proceedToPayment = () => {
     setUseAdvance(false);
     setAdvanceToUse(0);
-    
+
     if (invoiceType === 'CASH') {
       setPaymentAmount(totals.grandTotal);
     } else {
@@ -1130,6 +1158,83 @@ export default function BillingPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* NDPS Warning Modal */}
+      <Dialog open={showNDPSWarning} onOpenChange={setShowNDPSWarning}>
+        <DialogContent className="bg-white max-w-lg p-0 gap-0">
+          <DialogHeader className="bg-red-600 text-white px-4 py-3">
+            <DialogTitle className="text-sm font-semibold">⚠️ NDPS / Narcotic Drug Alert</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 space-y-4">
+            <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+              <p className="text-sm text-red-800 font-semibold mb-2">
+                🛡️ This invoice contains controlled substances under NDPS Act, 1985
+              </p>
+              <p className="text-xs text-red-700">
+                The following items require special documentation and will be recorded in NDPS Register:
+              </p>
+            </div>
+
+            <div className="bg-white border rounded-lg">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left p-2 font-semibold">Product</th>
+                    <th className="text-right p-2 font-semibold">Qty</th>
+                    <th className="text-center p-2 font-semibold">Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ndpsItemsInCart.map((item: any, i: number) => (
+                    <tr key={i} className="border-b">
+                      <td className="p-2">{item.productName}</td>
+                      <td className="p-2 text-right font-semibold">{item.quantity}</td>
+                      <td className="p-2 text-center">
+                        <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-semibold">
+                          NDPS
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3">
+              <p className="text-xs text-yellow-800 font-semibold mb-2">
+                📋 Required Compliance Actions:
+              </p>
+              <ul className="text-xs text-yellow-700 space-y-1 ml-4">
+                <li>✓ Verify buyer Drug License / NDPS License</li>
+                <li>✓ Obtain valid prescription (if required)</li>
+                <li>✓ Transaction auto-recorded in NDPS Register</li>
+                <li>✓ Record maintained for 2+ years as per law</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-2 pt-3 border-t">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowNDPSWarning(false)} 
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                size="sm" 
+                onClick={() => {
+                  setShowNDPSWarning(false);
+                  proceedToPayment();
+                }} 
+                className="flex-1 bg-red-600 hover:bg-red-700"
+              >
+                ✓ Acknowledged - Proceed
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

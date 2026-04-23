@@ -237,3 +237,61 @@ model SystemSettings {
   thermalPrintWidth Int      @default(80)
   updatedAt         DateTime @updatedAt
 }
+
+model NDPSProduct {
+  id              String            @id @default(cuid())
+  productId       String            @unique
+  scheduleType    String            @default("H1")
+  maxQtyPerSale   Float?
+  requiresRx      Boolean           @default(true)
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  transactions    NDPSTransaction[]
+}
+
+model NDPSLicense {
+  id              String   @id @default(cuid())
+  buyerName       String
+  buyerType       String
+  licenseNo       String   @unique
+  issuedBy        String?
+  validFrom       DateTime
+  validTo         DateTime
+  address         String?
+  mobile          String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  transactions    NDPSTransaction[]
+}
+
+model NDPSTransaction {
+  id                    String       @id @default(cuid())
+  transactionDate       DateTime     @default(now())
+  transactionType       String
+  ndpsProductId         String
+  ndpsProduct           NDPSProduct  @relation(fields: [ndpsProductId], references: [id])
+  ndpsLicenseId         String?
+  ndpsLicense           NDPSLicense? @relation(fields: [ndpsLicenseId], references: [id])
+  batchNo               String?
+  expiryDate            DateTime?
+  quantity              Float
+  unit                  String       @default("units")
+  supplierName          String?
+  supplierLicense       String?
+  invoiceNo             String?
+  prescriptionNo        String?
+  prescriptionDate      DateTime?
+  doctorName            String?
+  doctorRegistrationNo  String?
+  patientName           String?
+  patientAadhaar        String?
+  patientAge            Int?
+  patientGender         String?
+  patientMobile         String?
+  patientAddress        String?
+  purposeOfUse          String?
+  openingBalance        Float        @default(0)
+  closingBalance        Float        @default(0)
+  remarks               String?
+  createdAt             DateTime     @default(now())
+}
